@@ -1,57 +1,57 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *.so
+.python-version
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.coverage
-.coverage.*
-htmlcov/
 
-# Virtual envs
+# Virtualenv
 .venv/
 venv/
 env/
-ENV/
 
-# Secrets
+# Environment
 .env
 .env.*
 !.env.example
-.envrc
-
-# IDE
-.vscode/
-.idea/
 
 # Logs
-logs/
+logs/*
+!logs/.gitkeep
 *.log
-!.gitkeep
 
-# OS
+# Alembic / local artifacts
+alembic/versions/*.pyc
+
+# OS / editors
 .DS_Store
-Thumbs.db
+.idea/
+.vscode/
 
-# Build
-build/
+# Coverage / build
+.coverage
+htmlcov/
 dist/
+build/
 *.egg-info/
 
-# Local DB / temp
-*.sqlite3
-*.db
-tmp/
-temp/
-
-# Alembic cache
-alembic/__pycache__/
-
-# Docker / local overrides
+# Docker local overrides
 docker-compose.override.yml
 
-# Redis / queue artifacts
-*.rdb
-*.aof
-*.pid
+# Local env and backups
+.env
+.env.*
+.venv
+.venv*/
+*.bak
+*.bak_*
+*.before_drop_types
+*~
+tmp/
+
+# local backup files
+*.bak-*

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual envs
+.venv
+.venv*/
+venv/
+env/
+
+# Git
+.git
+.github/
+
+# Secrets & env
+.env
+.env.*
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups / temp
+*.bak
+*.before_drop_types
+*.tmp
+*~
+
+# Local backup files
+config.py.bak*
+docker-compose.yml.bak*
+requirements.txt.bak*
