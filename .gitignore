@@ -12,6 +12,7 @@ __pycache__/
 # Virtualenv
 .venv/
 venv/
+.venv*/
 env/
 
 # Environment
@@ -42,16 +43,13 @@ build/
 # Docker local overrides
 docker-compose.override.yml
 
-# Local env and backups
-.env
-.env.*
-.venv
-.venv*/
+# Local backups / temp
 *.bak
 *.bak_*
+*.bak-*
 *.before_drop_types
 *~
 tmp/
 
-# local backup files
-*.bak-*
+# Local-only docker compose
+docker-compose.local.yml
