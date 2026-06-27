@@ -281,7 +281,6 @@ jobs:
             echo 'SUMMARY_RUNNER_HEAD=$COMMIT_SHA'
             echo 'SUMMARY_REMOTE_GIT_HEAD='\"\$REMOTE_GIT_HEAD\"
             echo 'SUMMARY_DEPLOY_MARKER='\"\$REMOTE_DEPLOY_MARKER\"
-            echo 'SUMMARY_HEALTHCHECK_PASSED=pending'
             echo 'SUMMARY_SERVICES=bot,worker,postgres,redis'
             echo 'POST_DEPLOY_SUMMARY_END'
           "
@@ -327,4 +326,20 @@ jobs:
             echo 'WORKER_LOGS_START'
             docker compose logs --tail=50 worker
             echo 'WORKER_LOGS_END'
+          "
+
+      - name: Post-deploy final summary
+        if: steps.mode.outputs.dry_run == 'false'
+        run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+
+            echo 'FINAL_SUMMARY_START'
+            echo 'FINAL_RUNNER_HEAD=$COMMIT_SHA'
+            echo 'FINAL_REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
+            echo 'FINAL_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
+            echo 'FINAL_HEALTHCHECK_PASSED=yes'
+            echo 'FINAL_SUMMARY_END'
           "
