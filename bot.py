@@ -12,7 +12,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 import structlog
 
-from config import settings
+from config import deploy_commit_short, settings
 
 
 def configure_logging() -> None:
@@ -93,6 +93,7 @@ async def run_webhook_mode() -> None:
         port=settings.http_port,
         health_path=settings.healthcheck_url_path,
         webhook_path=settings.webhook_path,
+        deploy_commit_short=deploy_commit_short,
     )
 
     runner = web.AppRunner(app)
@@ -131,6 +132,7 @@ async def main() -> None:
         env=settings.app_env,
         use_webhook=settings.use_webhook,
         webhook_url=settings.webhook_url,
+        deploy_commit_short=deploy_commit_short,
     )
 
     if settings.use_webhook:

@@ -6,7 +6,7 @@ import sys
 
 import structlog
 
-from config import settings
+from config import deploy_commit_short, settings
 from scheduler.runner import run_worker
 
 
@@ -26,7 +26,11 @@ def configure_logging() -> None:
 async def main() -> None:
     configure_logging()
     logger = structlog.get_logger(__name__)
-    logger.info("worker_starting", env=settings.app_env)
+    logger.info(
+        "worker_starting",
+        env=settings.app_env,
+        deploy_commit_short=deploy_commit_short,
+    )
     await run_worker()
 
 
