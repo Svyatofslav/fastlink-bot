@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run deploy in dry-run mode"
+        description: "Run deploy in dry-run mode (no real changes)"
         required: true
         default: true
         type: boolean
 
 jobs:
   deploy:
-    name: Dry-run deploy to production
+    name: Deploy to production
     runs-on: ubuntu-latest
     environment: production
 
@@ -60,7 +60,7 @@ jobs:
           envsubst < .env.production.template > .env.production.generated
           test -s .env.production.generated
           if grep -n '\${[A-Za-z_][A-Za-z0-9_]*}' .env.production.generated; then
-            echo "Unresolved placeholders found in generated env file"
+            echo "ERROR: Unresolved placeholders found in generated env file"
             exit 1
           fi
           grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL)=' .env.production.generated
@@ -85,6 +85,8 @@ jobs:
             docker compose version
             docker compose config --services
           "
+
+      # ── DRY-RUN MODE ──────────────────────────────────────────────────────────
 
       - name: Rsync dry-run
         if: ${{ inputs.dry_run }}
@@ -111,7 +113,7 @@ jobs:
             -e "ssh -p $SSH_PORT" \
             ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
 
-      - name: Remote dry-run validation
+      - name: Remote dry-run env validation
         if: ${{ inputs.dry_run }}
         run: |
           scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.ci.test"
@@ -125,3 +127,93 @@ jobs:
             test ! -f .env.ci.test
             echo 'ENV_TEST_FILE_REMOVED=yes'
           "
+
+      # ── REAL DEPLOY MODE ──────────────────────────────────────────────────────
+
+      - name: Rsync real deploy
+        if: ${{ !inputs.dry_run }}
+        run: |
+          rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.venv/' \
+            --exclude 'venv/' \
+            --exclude '__pycache__/' \
+            --exclude '.pytest_cache/' \
+            --exclude '.ruff_cache/' \
+            --exclude '.mypy_cache/' \
+            --exclude '.env' \
+            --exclude '.env.local' \
+            --exclude '.env.production.generated' \
+            --exclude 'logs/' \
+            --exclude '*.log' \
+            --exclude '*.bak' \
+            --exclude '*.bak_*' \
+            --exclude '*.bak-*' \
+            --exclude '*.before_drop_types' \
+            --exclude 'docker-compose.local.yml' \
+            -e "ssh -p $SSH_PORT" \
+            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+      - name: Deploy env file to server
+        if: ${{ !inputs.dry_run }}
+        run: |
+          scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.new"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            test -f .env.new
+            mv -f .env.new .env
+            echo 'ENV_DEPLOYED=yes'
+          "
+
+      - name: Docker compose up
+        if: ${{ !inputs.dry_run }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            docker compose config --quiet
+            echo 'COMPOSE_CONFIG_VALID=yes'
+            docker compose pull --quiet
+            echo 'COMPOSE_PULL_DONE=yes'
+            docker compose build --no-cache
+            echo 'COMPOSE_BUILD_DONE=yes'
+            docker compose up -d
+            echo 'COMPOSE_UP_DONE=yes'
+          "
+
+      - name: Post-deploy healthcheck
+        if: ${{ !inputs.dry_run }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            echo 'Waiting for service to start...'
+            for i in 1 2 3 4 5; do
+              echo \"Attempt \$i/5...\"
+              if curl -fsS http://127.0.0.1:8080/health; then
+                echo
+                echo 'HEALTHCHECK_PASSED=yes'
+                exit 0
+              fi
+              echo 'Not ready yet, waiting 10s...'
+              sleep 10
+            done
+            echo 'HEALTHCHECK_FAILED: service did not respond after 5 attempts'
+            echo '--- docker compose ps ---'
+            cd '$APP_DIR'
+            docker compose ps
+            echo '--- bot logs ---'
+            docker compose logs --tail=50 bot
+            echo '--- worker logs ---'
+            docker compose logs --tail=50 worker
+            exit 1
+          "
+
+      # ── CLEANUP ───────────────────────────────────────────────────────────────
+
+      - name: Cleanup local generated env
+        if: always()
+        run: |
+          rm -f .env.production.generated
+          echo 'LOCAL_GENERATED_ENV_REMOVED=yes'
