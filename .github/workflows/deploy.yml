@@ -4,16 +4,35 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run deploy in dry-run mode (no real changes)"
+        description: "Run deploy in dry-run mode"
         required: true
         default: true
         type: boolean
+      confirm:
+        description: "Type 'deploy' to allow real deploy (required if dry_run=false)"
+        required: false
+        default: ""
+        type: string
+
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy to production
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 20
 
     env:
       APP_DIR: /opt/fastlink-bot
@@ -36,6 +55,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Decide deploy mode
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "source=pr-merge" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry_run=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
+            echo "source=manual" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require confirmation for manual real deploy
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirm }}" != "deploy" ]]; then
+            echo "ERROR: For real deploy you must set confirm='deploy'"
+            exit 1
+          fi
+          echo "Confirmation accepted."
+
+      - name: Runner commit info
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          COMMIT_SHORT="$(git rev-parse --short HEAD)"
+          echo "RUNNER_HEAD=$COMMIT_SHA"
+          echo "RUNNER_HEAD_SHORT=$COMMIT_SHORT"
+          echo "DEPLOY_SOURCE=${{ steps.mode.outputs.source }}"
+          echo "DRY_RUN=${{ steps.mode.outputs.dry_run }}"
 
       - name: Install deploy dependencies
         run: |
@@ -78,6 +133,13 @@ jobs:
             echo 'REMOTE_STATUS_END'
             echo 'REMOTE_BRANCH='\"\$(git branch --show-current)\"
             echo 'REMOTE_HEAD='\"\$(git rev-parse HEAD)\"
+            echo 'REMOTE_HEAD_SHORT='\"\$(git rev-parse --short HEAD)\"
+            if [ -f .deploy-commit ]; then
+              echo 'REMOTE_LAST_DEPLOY_COMMIT='\"\$(cat .deploy-commit)\"
+              echo 'REMOTE_LAST_DEPLOY_COMMIT_SHORT='\"\$(cat .deploy-commit-short)\"
+            else
+              echo 'REMOTE_LAST_DEPLOY_COMMIT=none'
+            fi
             echo 'REMOTE_ORIGIN_MAIN='\"\$(git rev-parse origin/main)\"
             test -f .env
             echo 'REMOTE_ENV_PRESENT=yes'
@@ -86,10 +148,8 @@ jobs:
             docker compose config --services
           "
 
-      # ── DRY-RUN MODE ──────────────────────────────────────────────────────────
-
       - name: Rsync dry-run
-        if: ${{ inputs.dry_run }}
+        if: steps.mode.outputs.dry_run == 'true'
         run: |
           rsync -avzn --delete \
             --exclude '.git/' \
@@ -113,8 +173,8 @@ jobs:
             -e "ssh -p $SSH_PORT" \
             ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
 
-      - name: Remote dry-run env validation
-        if: ${{ inputs.dry_run }}
+      - name: Remote dry-run validation
+        if: steps.mode.outputs.dry_run == 'true'
         run: |
           scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.ci.test"
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
@@ -128,10 +188,8 @@ jobs:
             echo 'ENV_TEST_FILE_REMOVED=yes'
           "
 
-      # ── REAL DEPLOY MODE ──────────────────────────────────────────────────────
-
       - name: Rsync real deploy
-        if: ${{ !inputs.dry_run }}
+        if: steps.mode.outputs.dry_run == 'false'
         run: |
           rsync -avz --delete \
             --exclude '.git/' \
@@ -156,7 +214,7 @@ jobs:
             ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
 
       - name: Deploy env file to server
-        if: ${{ !inputs.dry_run }}
+        if: steps.mode.outputs.dry_run == 'false'
         run: |
           scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.new"
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
@@ -167,53 +225,63 @@ jobs:
             echo 'ENV_DEPLOYED=yes'
           "
 
+      - name: Save deployed commit marker
+        if: steps.mode.outputs.dry_run == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          COMMIT_SHORT="$(git rev-parse --short HEAD)"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            printf '%s\n' '$COMMIT_SHA' > .deploy-commit
+            printf '%s\n' '$COMMIT_SHORT' > .deploy-commit-short
+            echo 'DEPLOY_COMMIT_MARKER_SAVED=$COMMIT_SHA'
+          "
+
       - name: Docker compose up
-        if: ${{ !inputs.dry_run }}
+        if: steps.mode.outputs.dry_run == 'false'
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
-            docker compose config --quiet
+            docker compose config -q
             echo 'COMPOSE_CONFIG_VALID=yes'
-            docker compose pull --quiet
+            docker compose pull postgres redis || true
             echo 'COMPOSE_PULL_DONE=yes'
-            docker compose build --no-cache
+            docker compose build bot worker
             echo 'COMPOSE_BUILD_DONE=yes'
-            docker compose up -d
+            docker compose up -d --remove-orphans
             echo 'COMPOSE_UP_DONE=yes'
           "
 
-      - name: Post-deploy healthcheck
-        if: ${{ !inputs.dry_run }}
+      - name: Post-deploy remote version info
+        if: steps.mode.outputs.dry_run == 'false'
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
-            echo 'Waiting for service to start...'
-            for i in 1 2 3 4 5; do
-              echo \"Attempt \$i/5...\"
-              if curl -fsS http://127.0.0.1:8080/health; then
-                echo
-                echo 'HEALTHCHECK_PASSED=yes'
-                exit 0
-              fi
-              echo 'Not ready yet, waiting 10s...'
-              sleep 10
-            done
-            echo 'HEALTHCHECK_FAILED: service did not respond after 5 attempts'
-            echo '--- docker compose ps ---'
             cd '$APP_DIR'
-            docker compose ps
-            echo '--- bot logs ---'
-            docker compose logs --tail=50 bot
-            echo '--- worker logs ---'
-            docker compose logs --tail=50 worker
-            exit 1
+            echo 'REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
+            echo 'REMOTE_GIT_HEAD_SHORT='\"\$(git rev-parse --short HEAD)\"
+            echo 'REMOTE_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
+            echo 'REMOTE_DEPLOY_MARKER_SHORT='\"\$(cat .deploy-commit-short)\"
           "
 
-      # ── CLEANUP ───────────────────────────────────────────────────────────────
-
-      - name: Cleanup local generated env
-        if: always()
+      - name: Post-deploy healthcheck
+        if: steps.mode.outputs.dry_run == 'false'
         run: |
-          rm -f .env.production.generated
-          echo 'LOCAL_GENERATED_ENV_REMOVED=yes'
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            sleep 5
+            if curl -fsS http://127.0.0.1:8080/health | grep -q '\"status\": \"ok\"'; then
+              echo 'HEALTHCHECK_PASSED=yes'
+            else
+              echo 'HEALTHCHECK_FAILED: /health did not return ok'
+              docker compose ps
+              docker compose logs --tail=50 bot
+              docker compose logs --tail=50 worker
+              exit 1
+            fi
+          "
