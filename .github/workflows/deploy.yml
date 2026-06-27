@@ -163,6 +163,8 @@ jobs:
             --exclude '.env' \
             --exclude '.env.local' \
             --exclude '.env.production.generated' \
+            --exclude '.deploy-commit' \
+            --exclude '.deploy-commit-short' \
             --exclude 'logs/' \
             --exclude '*.log' \
             --exclude '*.bak' \
@@ -203,6 +205,8 @@ jobs:
             --exclude '.env' \
             --exclude '.env.local' \
             --exclude '.env.production.generated' \
+            --exclude '.deploy-commit' \
+            --exclude '.deploy-commit-short' \
             --exclude 'logs/' \
             --exclude '*.log' \
             --exclude '*.bak' \
