@@ -294,3 +294,16 @@ jobs:
             docker compose logs --tail=50 worker
             exit 1
           "
+      - name: Post-deploy service logs
+        if: steps.mode.outputs.dry_run == 'false'
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            echo 'BOT_LOGS_START'
+            docker compose logs --tail=30 bot
+            echo 'BOT_LOGS_END'
+            echo 'WORKER_LOGS_START'
+            docker compose logs --tail=30 worker
+            echo 'WORKER_LOGS_END'
+          "
