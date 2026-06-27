@@ -54,3 +54,8 @@ tmp/
 
 # Local-only docker compose
 docker-compose.local.yml
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
