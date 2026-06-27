@@ -263,13 +263,27 @@ jobs:
       - name: Post-deploy remote version info
         if: steps.mode.outputs.dry_run == 'false'
         run: |
+          COMMIT_SHA="$(git rev-parse HEAD)"
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
-            echo 'REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
-            echo 'REMOTE_GIT_HEAD_SHORT='\"\$(git rev-parse --short HEAD)\"
-            echo 'REMOTE_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
-            echo 'REMOTE_DEPLOY_MARKER_SHORT='\"\$(cat .deploy-commit-short)\"
+            REMOTE_GIT_HEAD=\"\$(git rev-parse HEAD)\"
+            REMOTE_GIT_HEAD_SHORT=\"\$(git rev-parse --short HEAD)\"
+            REMOTE_DEPLOY_MARKER=\"\$(cat .deploy-commit)\"
+            REMOTE_DEPLOY_MARKER_SHORT=\"\$(cat .deploy-commit-short)\"
+
+            echo 'REMOTE_GIT_HEAD='\"\$REMOTE_GIT_HEAD\"
+            echo 'REMOTE_GIT_HEAD_SHORT='\"\$REMOTE_GIT_HEAD_SHORT\"
+            echo 'REMOTE_DEPLOY_MARKER='\"\$REMOTE_DEPLOY_MARKER\"
+            echo 'REMOTE_DEPLOY_MARKER_SHORT='\"\$REMOTE_DEPLOY_MARKER_SHORT\"
+
+            echo 'POST_DEPLOY_SUMMARY_START'
+            echo 'SUMMARY_RUNNER_HEAD=$COMMIT_SHA'
+            echo 'SUMMARY_REMOTE_GIT_HEAD='\"\$REMOTE_GIT_HEAD\"
+            echo 'SUMMARY_DEPLOY_MARKER='\"\$REMOTE_DEPLOY_MARKER\"
+            echo 'SUMMARY_HEALTHCHECK_PASSED=pending'
+            echo 'SUMMARY_SERVICES=bot,worker,postgres,redis'
+            echo 'POST_DEPLOY_SUMMARY_END'
           "
 
       - name: Post-deploy healthcheck
@@ -294,16 +308,23 @@ jobs:
             docker compose logs --tail=50 worker
             exit 1
           "
+
       - name: Post-deploy service logs
         if: steps.mode.outputs.dry_run == 'false'
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
+
+            echo 'COMPOSE_PS_START'
+            docker compose ps
+            echo 'COMPOSE_PS_END'
+
             echo 'BOT_LOGS_START'
-            docker compose logs --tail=30 bot
+            docker compose logs --tail=50 bot
             echo 'BOT_LOGS_END'
+
             echo 'WORKER_LOGS_START'
-            docker compose logs --tail=30 worker
+            docker compose logs --tail=50 worker
             echo 'WORKER_LOGS_END'
           "
