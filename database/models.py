@@ -40,14 +40,24 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger, unique=True, nullable=False, index=True
+    )
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    language_code: Mapped[str] = mapped_column(String(8), nullable=False, server_default="ru")
-    is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
-    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    language_code: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default="ru"
+    )
+    is_banned: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    last_active_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     subscriptions: Mapped[list[Subscription]] = relationship(
         back_populates="user",
@@ -75,13 +85,19 @@ class Admin(TimestampMixin, Base):
     __tablename__ = "admins"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger, unique=True, nullable=False, index=True
+    )
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     login: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     secretword_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    is_superadmin: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_superadmin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
     created_by_admin_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("admins.id", ondelete="SET NULL"),
@@ -120,8 +136,12 @@ class Server(TimestampMixin, Base):
     metrics_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     metrics_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     inbound_tag: Mapped[str] = mapped_column(String(128), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="100")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="100"
+    )
 
     tariffs: Mapped[list[Tariff]] = relationship(
         back_populates="server",
@@ -152,9 +172,15 @@ class Tariff(TimestampMixin, Base):
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     data_limit_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     price_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    price_currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="RUB")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="100")
+    price_currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="100"
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     server: Mapped[Server | None] = relationship(
@@ -200,11 +226,19 @@ class Subscription(TimestampMixin, Base):
         nullable=False,
         default=SubscriptionStatus.PENDING,
     )
-    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     data_limit_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    data_used_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
-    auto_renew: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    data_used_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default="0"
+    )
+    auto_renew: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     subscription_url: Mapped[str] = mapped_column(Text, nullable=False)
     disabled_reason: Mapped[DisabledReason | None] = mapped_column(
         SqlEnum(DisabledReason, name="disabled_reason"),
@@ -237,7 +271,9 @@ class Subscription(TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("server_id", "marzban_username", name="uq_subscriptions_server_username"),
+        UniqueConstraint(
+            "server_id", "marzban_username", name="uq_subscriptions_server_username"
+        ),
         Index("ix_subscriptions_status", "status"),
         Index("ix_subscriptions_user_status", "user_id", "status"),
         Index("ix_subscriptions_marzban_username", "marzban_username"),
@@ -265,19 +301,33 @@ class Payment(TimestampMixin, Base):
         nullable=False,
         default=PaymentProvider.YOOKASSA,
     )
-    provider_payment_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, nullable=True
+    )
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="RUB")
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
     status: Mapped[PaymentStatus] = mapped_column(
         SqlEnum(PaymentStatus, name="payment_status"),
         nullable=False,
         default=PaymentStatus.PENDING,
     )
-    idempotence_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    metadata_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    refundable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    refunded_amount: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    idempotence_key: Mapped[str] = mapped_column(
+        String(128), unique=True, nullable=False
+    )
+    metadata_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    refundable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    refunded_amount: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default="0"
+    )
 
     user: Mapped[User] = relationship(
         back_populates="payments",
@@ -296,9 +346,7 @@ class Payment(TimestampMixin, Base):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        Index("ix_payments_status", "status"),
-    )
+    __table_args__ = (Index("ix_payments_status", "status"),)
 
 
 class RefundRequest(TimestampMixin, Base):
@@ -336,7 +384,9 @@ class RefundRequest(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped[User] = relationship(
         back_populates="refund_requests",
@@ -359,9 +409,7 @@ class RefundRequest(TimestampMixin, Base):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        Index("ix_refund_requests_status", "status"),
-    )
+    __table_args__ = (Index("ix_refund_requests_status", "status"),)
 
 
 class Refund(TimestampMixin, Base):
@@ -385,16 +433,22 @@ class Refund(TimestampMixin, Base):
         nullable=False,
         default=PaymentProvider.YOOKASSA,
     )
-    provider_refund_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    provider_refund_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, nullable=True
+    )
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="RUB")
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
     status: Mapped[RefundStatus] = mapped_column(
         SqlEnum(RefundStatus, name="refund_status"),
         nullable=False,
         default=RefundStatus.PENDING,
     )
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     payment: Mapped[Payment] = relationship(
         back_populates="refunds",
@@ -405,9 +459,7 @@ class Refund(TimestampMixin, Base):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        Index("ix_refunds_status", "status"),
-    )
+    __table_args__ = (Index("ix_refunds_status", "status"),)
 
 
 class NotificationLog(Base):
@@ -452,7 +504,9 @@ class NotificationLog(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("user_id", "subscription_id", "type", name="uq_notifications_dedup"),
+        UniqueConstraint(
+            "user_id", "subscription_id", "type", name="uq_notifications_dedup"
+        ),
         Index("ix_notifications_log_type", "type"),
     )
 

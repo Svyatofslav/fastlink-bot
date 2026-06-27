@@ -1,6 +1,6 @@
 # FastLink Bot
 
-Telegram-бот для продажи VPN-подписок на базе [Marzban](https://github.com/Gozargah/Marzban) + Xray Reality.  
+Telegram-бот для продажи VPN-подписок на базе [Marzban](https://github.com/Gozargah/Marzban) + Xray Reality.
 Пользователь покупает подписку прямо в Telegram, получает ссылку и QR-код — без регистрации и личного кабинета.
 
 ---
@@ -161,7 +161,7 @@ docker compose -f docker-compose.local.yml exec bot alembic upgrade head
 docker compose -f docker-compose.local.yml down
 ```
 
-Данные PostgreSQL сохраняются в Docker volume `postgres-local-data`.  
+Данные PostgreSQL сохраняются в Docker volume `postgres-local-data`.
 Для полного сброса (удаление данных):
 
 ```bash
@@ -193,7 +193,7 @@ docker compose -f docker-compose.local.yml down -v
 
 ### Инфраструктура
 
-VPS: Ubuntu 22.04 LTS, проект живёт в `/opt/fastlink-bot`.  
+VPS: Ubuntu 22.04 LTS, проект живёт в `/opt/fastlink-bot`.
 Деплой происходит автоматически через GitHub Actions при пуше в ветку `main`.
 
 ### Первый деплой (ручной)
