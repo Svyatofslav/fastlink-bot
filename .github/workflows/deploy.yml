@@ -1,0 +1,126 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run deploy in dry-run mode"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  deploy:
+    name: Dry-run deploy to production
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      APP_DIR: /opt/fastlink-bot
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      MARZBAN_PASSWORD: ${{ secrets.MARZBAN_PASSWORD }}
+      METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+
+      OWNER_TELEGRAM_ID: ${{ vars.OWNER_TELEGRAM_ID }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+      MARZBAN_USERNAME: ${{ vars.MARZBAN_USERNAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deploy dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base rsync
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Setup known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Generate production env file locally
+        run: |
+          envsubst < .env.production.template > .env.production.generated
+          test -s .env.production.generated
+          if grep -n '\${[A-Za-z_][A-Za-z0-9_]*}' .env.production.generated; then
+            echo "Unresolved placeholders found in generated env file"
+            exit 1
+          fi
+          grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL)=' .env.production.generated
+
+      - name: Preflight SSH and remote state
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            echo 'REMOTE_HOST='\"\$(hostname)\"
+            echo 'REMOTE_USER='\"\$(whoami)\"
+            test -d '$APP_DIR'
+            cd '$APP_DIR'
+            echo 'REMOTE_STATUS_START'
+            git status --short
+            echo 'REMOTE_STATUS_END'
+            echo 'REMOTE_BRANCH='\"\$(git branch --show-current)\"
+            echo 'REMOTE_HEAD='\"\$(git rev-parse HEAD)\"
+            echo 'REMOTE_ORIGIN_MAIN='\"\$(git rev-parse origin/main)\"
+            test -f .env
+            echo 'REMOTE_ENV_PRESENT=yes'
+            docker --version
+            docker compose version
+            docker compose config --services
+          "
+
+      - name: Rsync dry-run
+        if: ${{ inputs.dry_run }}
+        run: |
+          rsync -avzn --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.venv/' \
+            --exclude 'venv/' \
+            --exclude '__pycache__/' \
+            --exclude '.pytest_cache/' \
+            --exclude '.ruff_cache/' \
+            --exclude '.mypy_cache/' \
+            --exclude '.env' \
+            --exclude '.env.local' \
+            --exclude 'logs/' \
+            --exclude '*.log' \
+            --exclude '*.bak' \
+            --exclude '*.bak_*' \
+            --exclude '*.bak-*' \
+            --exclude '*.before_drop_types' \
+            --exclude 'docker-compose.local.yml' \
+            -e "ssh -p $SSH_PORT" \
+            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+      - name: Remote dry-run validation
+        if: ${{ inputs.dry_run }}
+        run: |
+          scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.ci.test"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+            test -f .env.ci.test
+            echo 'ENV_TEST_FILE_PRESENT=yes'
+            grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL)=' .env.ci.test
+            rm -f .env.ci.test
+            test ! -f .env.ci.test
+            echo 'ENV_TEST_FILE_REMOVED=yes'
+          "
