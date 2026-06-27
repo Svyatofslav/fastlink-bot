@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  lint-and-test:
+    name: Ruff + Pytest
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fastlink
+          POSTGRES_USER: fastlink
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fastlink -d fastlink"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        env:
+          REDIS_PASSWORD: testredispassword
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "sh -c 'redis-cli -a $$REDIS_PASSWORD ping | grep PONG'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: test
+      APP_DEBUG: "false"
+      LOG_LEVEL: INFO
+
+      BOT_TOKEN: 123456:TEST_TOKEN
+      OWNER_TELEGRAM_ID: "123456789"
+
+      USE_WEBHOOK: "false"
+      SKIP_WEBHOOK_REGISTRATION: "true"
+      WEBHOOK_BASE_URL: http://localhost:8080
+      WEBHOOK_PATH: /webhook
+      WEBHOOK_SECRET: test_webhook_secret
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8080"
+
+      POSTGRES_DB: fastlink
+      POSTGRES_USER: fastlink
+      POSTGRES_PASSWORD: testpassword
+      DATABASE_URL: postgresql+asyncpg://fastlink:testpassword@127.0.0.1:5432/fastlink
+      DATABASE_URL_SYNC: postgresql://fastlink:testpassword@127.0.0.1:5432/fastlink
+
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: testredispassword
+      REDIS_DB: "0"
+      REDIS_FSM_DB: "1"
+      REDIS_CACHE_DB: "2"
+      REDIS_RATE_LIMIT_DB: "3"
+      REDIS_PAYMENT_DB: "4"
+      REDIS_MARZBAN_TOKEN_DB: "5"
+      REDIS_URL: redis://:testredispassword@127.0.0.1:6379/0
+      REDIS_URL_FSM: redis://:testredispassword@127.0.0.1:6379/1
+      REDIS_URL_CACHE: redis://:testredispassword@127.0.0.1:6379/2
+      REDIS_URL_RATE_LIMIT: redis://:testredispassword@127.0.0.1:6379/3
+      REDIS_URL_PAYMENT: redis://:testredispassword@127.0.0.1:6379/4
+      REDIS_URL_MARZBAN_TOKEN: redis://:testredispassword@127.0.0.1:6379/5
+
+      MARZBAN_API_BASE: http://127.0.0.1:8000/api
+      MARZBAN_USERNAME: test_admin
+      MARZBAN_PASSWORD: test_password
+      MARZBAN_TIMEOUT_SECONDS: "10"
+
+      METRICS_URL: http://127.0.0.1:9100/metrics
+      METRICS_TOKEN: test_metrics_token
+
+      DEFAULT_LANGUAGE: ru
+      FEATURE_I18N_ENABLED: "false"
+      FEATURE_ADMIN_ENABLED: "true"
+      FEATURE_PAYMENTS_ENABLED: "false"
+      FEATURE_REFUNDS_ENABLED: "false"
+
+      ADMIN_SESSION_TTL_SECONDS: "28800"
+
+      YOOKASSA_SHOP_ID: ""
+      YOOKASSA_SECRET_KEY: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Verify PostgreSQL is reachable
+        run: |
+          python - <<'PY'
+          import socket, time
+          host, port = "127.0.0.1", 5432
+          for _ in range(30):
+              try:
+                  with socket.create_connection((host, port), timeout=2):
+                      print("PostgreSQL is reachable")
+                      break
+              except OSError:
+                  time.sleep(2)
+          else:
+              raise SystemExit("PostgreSQL is not reachable")
+          PY
+
+      - name: Verify Redis is reachable
+        run: |
+          python - <<'PY'
+          import socket, time
+          host, port = "127.0.0.1", 6379
+          for _ in range(30):
+              try:
+                  with socket.create_connection((host, port), timeout=2):
+                      print("Redis is reachable")
+                      break
+              except OSError:
+                  time.sleep(2)
+          else:
+              raise SystemExit("Redis is not reachable")
+          PY
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run Pytest
+        run: pytest -q
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create CI env file for compose validation
+        run: |
+          cat > .env.local <<'EOF'
+          APP_ENV=development
+          APP_DEBUG=false
+          LOG_LEVEL=INFO
+          BOT_TOKEN=123456:TEST_TOKEN
+          OWNER_TELEGRAM_ID=123456789
+          USE_WEBHOOK=false
+          SKIP_WEBHOOK_REGISTRATION=true
+          WEBHOOK_BASE_URL=http://localhost:8080
+          WEBHOOK_PATH=/webhook
+          WEBHOOK_SECRET=test_webhook_secret
+          HTTP_HOST=0.0.0.0
+          HTTP_PORT=8080
+          POSTGRES_DB=fastlink
+          POSTGRES_USER=fastlink
+          POSTGRES_PASSWORD=testpassword
+          DATABASE_URL=postgresql+asyncpg://fastlink:testpassword@postgres:5432/fastlink
+          DATABASE_URL_SYNC=postgresql://fastlink:testpassword@postgres:5432/fastlink
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_PASSWORD=testredispassword
+          REDIS_DB=0
+          REDIS_FSM_DB=1
+          REDIS_CACHE_DB=2
+          REDIS_RATE_LIMIT_DB=3
+          REDIS_PAYMENT_DB=4
+          REDIS_MARZBAN_TOKEN_DB=5
+          REDIS_URL=redis://:testredispassword@redis:6379/0
+          REDIS_URL_FSM=redis://:testredispassword@redis:6379/1
+          REDIS_URL_CACHE=redis://:testredispassword@redis:6379/2
+          REDIS_URL_RATE_LIMIT=redis://:testredispassword@redis:6379/3
+          REDIS_URL_PAYMENT=redis://:testredispassword@redis:6379/4
+          REDIS_URL_MARZBAN_TOKEN=redis://:testredispassword@redis:6379/5
+          MARZBAN_API_BASE=http://host.docker.internal:8000/api
+          MARZBAN_USERNAME=test_admin
+          MARZBAN_PASSWORD=test_password
+          MARZBAN_TIMEOUT_SECONDS=10
+          METRICS_URL=http://localhost:9100/metrics
+          METRICS_TOKEN=test_metrics_token
+          DEFAULT_LANGUAGE=ru
+          FEATURE_I18N_ENABLED=false
+          FEATURE_ADMIN_ENABLED=true
+          FEATURE_PAYMENTS_ENABLED=false
+          FEATURE_REFUNDS_ENABLED=false
+          ADMIN_SESSION_TTL_SECONDS=28800
+          YOOKASSA_SHOP_ID=
+          YOOKASSA_SECRET_KEY=
+          EOF
+
+      - name: Validate local compose template
+        run: docker compose -f docker-compose.local.example.yml config
+
+      - name: Build Docker image
+        run: docker build -t fastlink-bot-ci .
