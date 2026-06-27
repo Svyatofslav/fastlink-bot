@@ -1,0 +1,88 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastlink-bot
+    command: ["python", "bot.py"]
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - bot-net
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./logs:/app/logs
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastlink-worker
+    command: ["python", "worker.py"]
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - bot-net
+    volumes:
+      - ./logs:/app/logs
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: fastlink-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-net
+    volumes:
+      - /var/lib/fastlink/postgres:/var/lib/postgresql/data
+      - ./database/views.sql:/docker-entrypoint-initdb.d/01-views.sql:ro
+      - ./database/functions.sql:/docker-entrypoint-initdb.d/02-functions.sql:ro
+      - ./database/triggers.sql:/docker-entrypoint-initdb.d/03-triggers.sql:ro
+      - ./database/indexes.sql:/docker-entrypoint-initdb.d/04-indexes.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: fastlink-redis
+    restart: always
+    command: >
+      sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-net
+    volumes:
+      - /var/lib/fastlink/redis:/data
+
+networks:
+  bot-net:
+    driver: bridge
