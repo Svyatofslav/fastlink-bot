@@ -274,14 +274,19 @@ jobs:
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
-            sleep 5
-            if curl -fsS http://127.0.0.1:8080/health | grep -q '\"status\": \"ok\"'; then
-              echo 'HEALTHCHECK_PASSED=yes'
-            else
-              echo 'HEALTHCHECK_FAILED: /health did not return ok'
-              docker compose ps
-              docker compose logs --tail=50 bot
-              docker compose logs --tail=50 worker
-              exit 1
-            fi
+
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS http://127.0.0.1:8080/health | grep -q '\"status\": \"ok\"'; then
+                echo 'HEALTHCHECK_PASSED=yes'
+                exit 0
+              fi
+              echo \"Healthcheck attempt \$i failed, waiting 3s...\"
+              sleep 3
+            done
+
+            echo 'HEALTHCHECK_FAILED: /health did not return ok after retries'
+            docker compose ps
+            docker compose logs --tail=50 bot
+            docker compose logs --tail=50 worker
+            exit 1
           "
