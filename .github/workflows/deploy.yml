@@ -95,7 +95,7 @@ jobs:
       - name: Install deploy dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gettext-base rsync
+          sudo apt-get install -y gettext-base
 
       - name: Setup SSH key
         run: |
@@ -148,34 +148,8 @@ jobs:
             docker compose config --services
           "
 
-      - name: Rsync dry-run
-        if: steps.mode.outputs.dry_run == 'true'
-        run: |
-          rsync -avzn --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude '.venv/' \
-            --exclude 'venv/' \
-            --exclude '__pycache__/' \
-            --exclude '.pytest_cache/' \
-            --exclude '.ruff_cache/' \
-            --exclude '.mypy_cache/' \
-            --exclude '.env' \
-            --exclude '.env.local' \
-            --exclude '.env.production.generated' \
-            --exclude '.deploy-commit' \
-            --exclude '.deploy-commit-short' \
-            --exclude 'logs/' \
-            --exclude '*.log' \
-            --exclude '*.bak' \
-            --exclude '*.bak_*' \
-            --exclude '*.bak-*' \
-            --exclude '*.before_drop_types' \
-            --exclude 'docker-compose.local.yml' \
-            -e "ssh -p $SSH_PORT" \
-            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
-
-      - name: Remote dry-run validation
+      # Dry-run остаётся только для проверки env/SSH, без rsync
+      - name: Remote dry-run env validation
         if: steps.mode.outputs.dry_run == 'true'
         run: |
           scp -P "$SSH_PORT" .env.production.generated "$SSH_USER@$SSH_HOST:$APP_DIR/.env.ci.test"
@@ -190,33 +164,6 @@ jobs:
             echo 'ENV_TEST_FILE_REMOVED=yes'
           "
 
-      - name: Rsync real deploy
-        if: steps.mode.outputs.dry_run == 'false'
-        run: |
-          rsync -avz --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude '.venv/' \
-            --exclude 'venv/' \
-            --exclude '__pycache__/' \
-            --exclude '.pytest_cache/' \
-            --exclude '.ruff_cache/' \
-            --exclude '.mypy_cache/' \
-            --exclude '.env' \
-            --exclude '.env.local' \
-            --exclude '.env.production.generated' \
-            --exclude '.deploy-commit' \
-            --exclude '.deploy-commit-short' \
-            --exclude 'logs/' \
-            --exclude '*.log' \
-            --exclude '*.bak' \
-            --exclude '*.bak_*' \
-            --exclude '*.bak-*' \
-            --exclude '*.before_drop_types' \
-            --exclude 'docker-compose.local.yml' \
-            -e "ssh -p $SSH_PORT" \
-            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
-
       - name: Deploy env file to server
         if: steps.mode.outputs.dry_run == 'false'
         run: |
@@ -229,7 +176,7 @@ jobs:
             echo 'ENV_DEPLOYED=yes'
           "
 
-      - name: Save deployed commit marker
+      - name: Sync remote git repo to deployed commit
         if: steps.mode.outputs.dry_run == 'false'
         shell: bash
         run: |
@@ -239,26 +186,16 @@ jobs:
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
+
+            git fetch origin main
+            git checkout -B main '$COMMIT_SHA'
+            git reset --hard '$COMMIT_SHA'
+            git clean -fd
+
             printf '%s\n' '$COMMIT_SHA' > .deploy-commit
             printf '%s\n' '$COMMIT_SHORT' > .deploy-commit-short
             echo 'DEPLOY_COMMIT_MARKER_SAVED=$COMMIT_SHA'
-          "
-
-      - name: Sync remote git metadata to deployed commit
-        if: steps.mode.outputs.dry_run == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-          COMMIT_SHA="$(git rev-parse HEAD)"
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
-            set -e
-            cd '$APP_DIR'
-
-            git fetch origin main || git fetch origin || true
-            git update-ref refs/heads/main '$COMMIT_SHA'
-            git symbolic-ref HEAD refs/heads/main
-
-            echo 'REMOTE_GIT_METADATA_SYNCED=yes'
+            echo 'REMOTE_GIT_SYNCED=yes'
             echo 'REMOTE_GIT_HEAD_AFTER_SYNC='\"\$(git rev-parse HEAD)\"
             echo 'REMOTE_GIT_HEAD_AFTER_SYNC_SHORT='\"\$(git rev-parse --short HEAD)\"
 
