@@ -244,6 +244,36 @@ jobs:
             echo 'DEPLOY_COMMIT_MARKER_SAVED=$COMMIT_SHA'
           "
 
+      - name: Sync remote git metadata to deployed commit
+        if: steps.mode.outputs.dry_run == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT_SHA="$(git rev-parse HEAD)"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$APP_DIR'
+
+            git fetch origin main || git fetch origin || true
+            git update-ref refs/heads/main '$COMMIT_SHA'
+            git symbolic-ref HEAD refs/heads/main
+
+            echo 'REMOTE_GIT_METADATA_SYNCED=yes'
+            echo 'REMOTE_GIT_HEAD_AFTER_SYNC='\"\$(git rev-parse HEAD)\"
+            echo 'REMOTE_GIT_HEAD_AFTER_SYNC_SHORT='\"\$(git rev-parse --short HEAD)\"
+
+            GIT_STATUS=\"\$(git status --short || true)\"
+            if [ -z \"\$GIT_STATUS\" ]; then
+              echo 'REMOTE_GIT_DIRTY_AFTER_SYNC=no'
+            else
+              echo 'REMOTE_GIT_DIRTY_AFTER_SYNC=yes'
+              echo 'REMOTE_GIT_STATUS_AFTER_SYNC_START'
+              echo \"\$GIT_STATUS\"
+              echo 'REMOTE_GIT_STATUS_AFTER_SYNC_END'
+              exit 1
+            fi
+          "
+
       - name: Docker compose up
         if: steps.mode.outputs.dry_run == 'false'
         run: |
@@ -271,11 +301,21 @@ jobs:
             REMOTE_GIT_HEAD_SHORT=\"\$(git rev-parse --short HEAD)\"
             REMOTE_DEPLOY_MARKER=\"\$(cat .deploy-commit)\"
             REMOTE_DEPLOY_MARKER_SHORT=\"\$(cat .deploy-commit-short)\"
+            REMOTE_GIT_STATUS=\"\$(git status --short || true)\"
 
             echo 'REMOTE_GIT_HEAD='\"\$REMOTE_GIT_HEAD\"
             echo 'REMOTE_GIT_HEAD_SHORT='\"\$REMOTE_GIT_HEAD_SHORT\"
             echo 'REMOTE_DEPLOY_MARKER='\"\$REMOTE_DEPLOY_MARKER\"
             echo 'REMOTE_DEPLOY_MARKER_SHORT='\"\$REMOTE_DEPLOY_MARKER_SHORT\"
+
+            if [ -z \"\$REMOTE_GIT_STATUS\" ]; then
+              echo 'REMOTE_GIT_DIRTY=no'
+            else
+              echo 'REMOTE_GIT_DIRTY=yes'
+              echo 'REMOTE_GIT_STATUS_START'
+              echo \"\$REMOTE_GIT_STATUS\"
+              echo 'REMOTE_GIT_STATUS_END'
+            fi
 
             echo 'POST_DEPLOY_SUMMARY_START'
             echo 'SUMMARY_RUNNER_HEAD=$COMMIT_SHA'
@@ -335,11 +375,20 @@ jobs:
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
+            FINAL_GIT_STATUS=\"\$(git status --short || true)\"
 
             echo 'FINAL_SUMMARY_START'
             echo 'FINAL_RUNNER_HEAD=$COMMIT_SHA'
             echo 'FINAL_REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
             echo 'FINAL_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
+            if [ -z \"\$FINAL_GIT_STATUS\" ]; then
+              echo 'FINAL_GIT_DIRTY=no'
+            else
+              echo 'FINAL_GIT_DIRTY=yes'
+              echo 'FINAL_GIT_STATUS_START'
+              echo \"\$FINAL_GIT_STATUS\"
+              echo 'FINAL_GIT_STATUS_END'
+            fi
             echo 'FINAL_HEALTHCHECK_PASSED=yes'
             echo 'FINAL_SUMMARY_END'
           "
