@@ -188,7 +188,6 @@ jobs:
             cd '$APP_DIR'
 
             git fetch origin main
-            git checkout -B main '$COMMIT_SHA'
             git reset --hard '$COMMIT_SHA'
             git clean -fd
 
