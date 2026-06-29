@@ -46,6 +46,7 @@ jobs:
       REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
       MARZBAN_PASSWORD: ${{ secrets.MARZBAN_PASSWORD }}
       METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+      FASTLINK_CRYPTO_MASTER_KEY: ${{ secrets.FASTLINK_CRYPTO_MASTER_KEY }}
 
       OWNER_TELEGRAM_ID: ${{ vars.OWNER_TELEGRAM_ID }}
       POSTGRES_DB: ${{ vars.POSTGRES_DB }}
