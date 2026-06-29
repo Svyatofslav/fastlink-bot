@@ -123,6 +123,7 @@ jobs:
           MARZBAN_PASSWORD: test_password
           METRICS_URL: http://127.0.0.1:9100/metrics
           METRICS_TOKEN: test_metrics_token
+          FASTLINK_CRYPTO_MASTER_KEY: 99f46a69a38efde2bdcaaf8cda4a1aa209dbf9d33f3c7c37298dfa6a01d88720
         run: pytest -q
 
   docker-build:
@@ -177,6 +178,7 @@ jobs:
           MARZBAN_TIMEOUT_SECONDS=10
           METRICS_URL=http://localhost:9100/metrics
           METRICS_TOKEN=test_metrics_token
+          FASTLINK_CRYPTO_MASTER_KEY=99f46a69a38efde2bdcaaf8cda4a1aa209dbf9d33f3c7c37298dfa6a01d88720
           DEFAULT_LANGUAGE=ru
           FEATURE_I18N_ENABLED=false
           FEATURE_ADMIN_ENABLED=true

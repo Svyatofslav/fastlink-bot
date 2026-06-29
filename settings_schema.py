@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -66,6 +66,10 @@ class Settings(BaseSettings):
 
     metrics_url: str = Field(alias="METRICS_URL")
     metrics_token: str = Field(alias="METRICS_TOKEN")
+
+    fastlink_crypto_master_key: SecretStr = Field(
+        alias="FASTLINK_CRYPTO_MASTER_KEY",
+    )
 
     owner_telegram_id: int = Field(alias="OWNER_TELEGRAM_ID")
     admin_session_ttl_seconds: int = Field(

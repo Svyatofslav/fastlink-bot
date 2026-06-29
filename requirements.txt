@@ -13,3 +13,4 @@ qrcode[pil]==8.2
 pillow==11.2.1
 structlog==25.4.0
 psycopg2-binary==2.9.9
+cryptography==41.0.7
