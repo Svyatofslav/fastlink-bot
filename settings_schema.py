@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8080, alias="HTTP_PORT")
-    use_webhook: bool = Field(default=True, alias="USE_WEBHOOK")
+    use_webhook: bool = Field(default=False, alias="USE_WEBHOOK")
     skip_webhook_registration: bool = Field(
         default=False,
         alias="SKIP_WEBHOOK_REGISTRATION",

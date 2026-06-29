@@ -57,7 +57,7 @@ def test_settings_defaults():
 
     assert settings.bot_parse_mode == "HTML"
     assert settings.http_port == 8080
-    assert settings.use_webhook is True
+    assert settings.use_webhook is False
 
 
 def test_is_production_flag():

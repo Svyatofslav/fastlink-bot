@@ -5,14 +5,17 @@ import logging
 import sys
 from contextlib import suppress
 
+import structlog
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.types import Update
 from redis.asyncio import Redis
-import structlog
 
 from config import get_deploy_commit_short, settings
+from database.session import AsyncSessionFactory
+from middlewares import DbSessionMiddleware, ThrottlingMiddleware, UserMiddleware
 
 
 def configure_logging() -> None:
@@ -28,6 +31,12 @@ def configure_logging() -> None:
     )
 
 
+def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
+    dp.update.middleware(DbSessionMiddleware(session_factory=AsyncSessionFactory))
+    dp.update.middleware(UserMiddleware())
+    dp.update.middleware(ThrottlingMiddleware(redis=redis_rate_limit))
+
+
 async def healthcheck(_: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
@@ -36,6 +45,18 @@ async def telegram_webhook(request: web.Request) -> web.Response:
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if secret != settings.webhook_secret:
         return web.Response(status=403, text="forbidden")
+
+    bot: Bot = request.app["bot"]
+    dp: Dispatcher = request.app["dp"]
+
+    try:
+        data = await request.json()
+        update = Update.model_validate(data)
+        await dp.feed_update(bot=bot, update=update)
+    except Exception:
+        logger = structlog.get_logger(__name__)
+        logger.exception("webhook_processing_error")
+
     return web.Response(status=200, text="ok")
 
 
@@ -56,31 +77,37 @@ async def on_startup(app: web.Application) -> None:
 
 async def on_shutdown(app: web.Application) -> None:
     bot: Bot = app["bot"]
-    redis: Redis = app["redis"]
+    redis_fsm: Redis = app["redis_fsm"]
+    redis_rate_limit: Redis = app["redis_rate_limit"]
 
     with suppress(Exception):
         if settings.use_webhook:
             await bot.delete_webhook(drop_pending_updates=False)
 
     await bot.session.close()
-    await redis.aclose()
+    await redis_fsm.aclose()
+    await redis_rate_limit.aclose()
 
 
 async def run_webhook_mode() -> None:
     logger = structlog.get_logger(__name__)
 
-    redis = Redis.from_url(settings.redis_url_fsm)
-    storage = RedisStorage(redis=redis)
+    redis_fsm = Redis.from_url(settings.redis_url_fsm)
+    redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
+
+    storage = RedisStorage(redis=redis_fsm)
     bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
     )
     dp = Dispatcher(storage=storage)
+    setup_middlewares(dp, redis_rate_limit)
 
     app = web.Application()
     app["bot"] = bot
     app["dp"] = dp
-    app["redis"] = redis
+    app["redis_fsm"] = redis_fsm
+    app["redis_rate_limit"] = redis_rate_limit
 
     app.router.add_get(settings.healthcheck_url_path, healthcheck)
     app.router.add_post(settings.webhook_path, telegram_webhook)
@@ -109,19 +136,23 @@ async def run_webhook_mode() -> None:
 
 
 async def run_polling_mode() -> None:
-    redis = Redis.from_url(settings.redis_url_fsm)
-    storage = RedisStorage(redis=redis)
+    redis_fsm = Redis.from_url(settings.redis_url_fsm)
+    redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
+
+    storage = RedisStorage(redis=redis_fsm)
     bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
     )
     dp = Dispatcher(storage=storage)
+    setup_middlewares(dp, redis_rate_limit)
 
     try:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
-        await redis.aclose()
+        await redis_fsm.aclose()
+        await redis_rate_limit.aclose()
 
 
 async def main() -> None:
