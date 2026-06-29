@@ -6,7 +6,6 @@ alembic==1.16.2
 pydantic-settings==2.10.1
 httpx==0.28.1
 redis[hiredis]==5.2.1
-bcrypt==4.3.0
 apscheduler==3.10.4
 arq==0.26.3
 qrcode[pil]==8.2
@@ -14,3 +13,4 @@ pillow==11.2.1
 structlog==25.4.0
 psycopg2-binary==2.9.9
 cryptography==41.0.7
+argon2-cffi==23.1.0
