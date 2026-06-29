@@ -33,9 +33,18 @@ def configure_logging() -> None:
 
 
 def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
-    dp.update.middleware(DbSessionMiddleware(session_factory=AsyncSessionFactory))
-    dp.update.middleware(UserMiddleware())
-    dp.update.middleware(ThrottlingMiddleware(redis=redis_rate_limit))
+    db_session_middleware = DbSessionMiddleware(session_factory=AsyncSessionFactory)
+    user_middleware = UserMiddleware()
+    throttling_middleware = ThrottlingMiddleware(redis=redis_rate_limit)
+
+    dp.message.middleware(db_session_middleware)
+    dp.callback_query.middleware(db_session_middleware)
+
+    dp.message.middleware(user_middleware)
+    dp.callback_query.middleware(user_middleware)
+
+    dp.message.middleware(throttling_middleware)
+    dp.callback_query.middleware(throttling_middleware)
 
 
 async def healthcheck(_: web.Request) -> web.Response:
