@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 from config import get_deploy_commit_short, settings
 from database.session import AsyncSessionFactory
 from middlewares import DbSessionMiddleware, ThrottlingMiddleware, UserMiddleware
+from handlers import router as root_router
 
 
 def configure_logging() -> None:
@@ -102,6 +103,7 @@ async def run_webhook_mode() -> None:
     )
     dp = Dispatcher(storage=storage)
     setup_middlewares(dp, redis_rate_limit)
+    dp.include_router(root_router)
 
     app = web.Application()
     app["bot"] = bot
@@ -146,6 +148,7 @@ async def run_polling_mode() -> None:
     )
     dp = Dispatcher(storage=storage)
     setup_middlewares(dp, redis_rate_limit)
+    dp.include_router(root_router)
 
     try:
         await dp.start_polling(bot)
