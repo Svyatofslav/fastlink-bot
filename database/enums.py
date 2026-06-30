@@ -81,3 +81,10 @@ class AdminActionType(StrEnum):
     APPROVE_REFUND = "approve_refund"
     REJECT_REFUND = "reject_refund"
     PROCESS_REFUND = "process_refund"
+
+
+class WebhookEventStatus(StrEnum):
+    RECEIVED = "received"
+    PROCESSING = "processing"
+    DONE = "done"
+    FAILED = "failed"

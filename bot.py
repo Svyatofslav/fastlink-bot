@@ -17,6 +17,7 @@ from config import get_deploy_commit_short, settings
 from database.session import AsyncSessionFactory
 from middlewares import DbSessionMiddleware, ThrottlingMiddleware, UserMiddleware
 from handlers import router as root_router
+from webhooks.test import test_webhook
 
 
 def configure_logging() -> None:
@@ -122,6 +123,7 @@ async def run_webhook_mode() -> None:
 
     app.router.add_get(settings.healthcheck_url_path, healthcheck)
     app.router.add_post(settings.webhook_path, telegram_webhook)
+    app.router.add_post("/webhook/test", test_webhook)
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
 

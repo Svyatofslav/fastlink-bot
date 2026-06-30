@@ -1,8 +1,8 @@
 """initial
 
-Revision ID: 522f84617ca9
+Revision ID: 000000000000
 Revises:
-Create Date: 2026-06-22 17:33:35.678032
+Create Date: 2026-06-30 08:12:00
 
 """
 
@@ -10,18 +10,194 @@ from __future__ import annotations
 
 from typing import Union
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "522f84617ca9"
+revision: str = "000000000000"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
 
+    # Enum types: create once
+    for name, values in [
+        ("subscription_status", ["PENDING", "ACTIVE", "DISABLED", "EXPIRED"]),
+        (
+            "disabled_reason",
+            [
+                "EXPIRED",
+                "REFUNDED",
+                "ADMIN_DISABLED",
+                "FRAUD_SUSPECTED",
+                "PAYMENT_CANCELED",
+                "SYSTEM_ERROR",
+            ],
+        ),
+        ("payment_provider", ["YOOKASSA"]),
+        (
+            "payment_status",
+            [
+                "PENDING",
+                "WAITING_FOR_CAPTURE",
+                "SUCCEEDED",
+                "CANCELED",
+                "REFUNDED_PARTIALLY",
+                "REFUNDED_FULLY",
+            ],
+        ),
+        (
+            "refund_request_status",
+            ["NEW", "IN_REVIEW", "APPROVED", "REJECTED", "PROCESSED", "FAILED"],
+        ),
+        ("refund_status", ["PENDING", "SUCCEEDED", "FAILED", "CANCELED"]),
+        (
+            "notification_type",
+            [
+                "SUB_EXPIRES_3D",
+                "SUB_EXPIRES_1D",
+                "TRAFFIC_80",
+                "TRAFFIC_95",
+                "TRAFFIC_100",
+                "REFUND_PROCESSED",
+                "PAYMENT_SUCCEEDED",
+            ],
+        ),
+        ("notification_delivery_status", ["SENT", "FAILED"]),
+        (
+            "admin_action_type",
+            [
+                "LOGIN",
+                "LOGOUT",
+                "CREATE_ADMIN",
+                "UPDATE_ADMIN",
+                "DISABLE_ADMIN",
+                "ENABLE_ADMIN",
+                "CREATE_SERVER",
+                "UPDATE_SERVER",
+                "DELETE_SERVER",
+                "CREATE_TARIFF",
+                "UPDATE_TARIFF",
+                "DELETE_TARIFF",
+                "BAN_USER",
+                "UNBAN_USER",
+                "DISABLE_SUBSCRIPTION",
+                "ENABLE_SUBSCRIPTION",
+                "APPROVE_REFUND",
+                "REJECT_REFUND",
+                "PROCESS_REFUND",
+            ],
+        ),
+        ("webhook_event_status", ["RECEIVED", "PROCESSING", "DONE", "FAILED"]),
+    ]:
+        postgresql.ENUM(*values, name=name).create(bind, checkfirst=True)
+
+    # Enum instances (no CREATE TYPE)
+    subscription_status_enum = postgresql.ENUM(
+        "PENDING",
+        "ACTIVE",
+        "DISABLED",
+        "EXPIRED",
+        name="subscription_status",
+        create_type=False,
+    )
+    disabled_reason_enum = postgresql.ENUM(
+        "EXPIRED",
+        "REFUNDED",
+        "ADMIN_DISABLED",
+        "FRAUD_SUSPECTED",
+        "PAYMENT_CANCELED",
+        "SYSTEM_ERROR",
+        name="disabled_reason",
+        create_type=False,
+    )
+    payment_provider_enum = postgresql.ENUM(
+        "YOOKASSA",
+        name="payment_provider",
+        create_type=False,
+    )
+    payment_status_enum = postgresql.ENUM(
+        "PENDING",
+        "WAITING_FOR_CAPTURE",
+        "SUCCEEDED",
+        "CANCELED",
+        "REFUNDED_PARTIALLY",
+        "REFUNDED_FULLY",
+        name="payment_status",
+        create_type=False,
+    )
+    refund_request_status_enum = postgresql.ENUM(
+        "NEW",
+        "IN_REVIEW",
+        "APPROVED",
+        "REJECTED",
+        "PROCESSED",
+        "FAILED",
+        name="refund_request_status",
+        create_type=False,
+    )
+    refund_status_enum = postgresql.ENUM(
+        "PENDING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELED",
+        name="refund_status",
+        create_type=False,
+    )
+    notification_type_enum = postgresql.ENUM(
+        "SUB_EXPIRES_3D",
+        "SUB_EXPIRES_1D",
+        "TRAFFIC_80",
+        "TRAFFIC_95",
+        "TRAFFIC_100",
+        "REFUND_PROCESSED",
+        "PAYMENT_SUCCEEDED",
+        name="notification_type",
+        create_type=False,
+    )
+    notification_delivery_status_enum = postgresql.ENUM(
+        "SENT",
+        "FAILED",
+        name="notification_delivery_status",
+        create_type=False,
+    )
+    admin_action_type_enum = postgresql.ENUM(
+        "LOGIN",
+        "LOGOUT",
+        "CREATE_ADMIN",
+        "UPDATE_ADMIN",
+        "DISABLE_ADMIN",
+        "ENABLE_ADMIN",
+        "CREATE_SERVER",
+        "UPDATE_SERVER",
+        "DELETE_SERVER",
+        "CREATE_TARIFF",
+        "UPDATE_TARIFF",
+        "DELETE_TARIFF",
+        "BAN_USER",
+        "UNBAN_USER",
+        "DISABLE_SUBSCRIPTION",
+        "ENABLE_SUBSCRIPTION",
+        "APPROVE_REFUND",
+        "REJECT_REFUND",
+        "PROCESS_REFUND",
+        name="admin_action_type",
+        create_type=False,
+    )
+    webhook_event_status_enum = postgresql.ENUM(
+        "RECEIVED",
+        "PROCESSING",
+        "DONE",
+        "FAILED",
+        name="webhook_event_status",
+        create_type=False,
+    )
+
+    # users
     op.create_table(
         "users",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -45,10 +221,12 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.UniqueConstraint("telegram_id", name="uq_users_telegram_id"),
+        # убираем отдельный UniqueConstraint, как это делает schema_check
+        # sa.UniqueConstraint("telegram_id", name="uq_users_telegram_id"),
     )
-    op.create_index("ix_users_telegram_id", "users", ["telegram_id"])
+    op.create_index("ix_users_telegram_id", "users", ["telegram_id"], unique=True)
 
+    # admins
     op.create_table(
         "admins",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -56,7 +234,7 @@ def upgrade() -> None:
         sa.Column("username", sa.String(64), nullable=True),
         sa.Column("login", sa.String(64), nullable=False),
         sa.Column("password_hash", sa.Text(), nullable=False),
-        sa.Column("secret_word_hash", sa.Text(), nullable=False),
+        sa.Column("secretword_hash", sa.Text(), nullable=False),
         sa.Column(
             "is_superadmin", sa.Boolean(), nullable=False, server_default="false"
         ),
@@ -79,11 +257,13 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.UniqueConstraint("telegram_id", name="uq_admins_telegram_id"),
+        # убираем UniqueConstraint по telegram_id, оставляем только по login
+        # sa.UniqueConstraint("telegram_id", name="uq_admins_telegram_id"),
         sa.UniqueConstraint("login", name="uq_admins_login"),
     )
-    op.create_index("ix_admins_telegram_id", "admins", ["telegram_id"])
+    op.create_index("ix_admins_telegram_id", "admins", ["telegram_id"], unique=True)
 
+    # servers
     op.create_table(
         "servers",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -114,6 +294,7 @@ def upgrade() -> None:
     op.create_index("ix_servers_is_active", "servers", ["is_active"])
     op.create_index("ix_servers_sort_order", "servers", ["sort_order"])
 
+    # tariffs
     op.create_table(
         "tariffs",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -148,6 +329,7 @@ def upgrade() -> None:
     op.create_index("ix_tariffs_is_active", "tariffs", ["is_active"])
     op.create_index("ix_tariffs_sort_order", "tariffs", ["sort_order"])
 
+    # subscriptions
     op.create_table(
         "subscriptions",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -172,16 +354,10 @@ def upgrade() -> None:
         sa.Column("marzban_username", sa.String(128), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending",
-                "active",
-                "disabled",
-                "expired",
-                name="subscriptionstatus",
-                create_type=False,
-            ),
+            subscription_status_enum,
             nullable=False,
-            server_default="pending",
+            # убираем server_default, автоген это предлагает
+            # server_default="PENDING",
         ),
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -191,20 +367,7 @@ def upgrade() -> None:
         ),
         sa.Column("auto_renew", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("subscription_url", sa.Text(), nullable=False),
-        sa.Column(
-            "disabled_reason",
-            sa.Enum(
-                "expired",
-                "refunded",
-                "admindisabled",
-                "fraudsuspected",
-                "paymentcanceled",
-                "systemerror",
-                name="disabledreason",
-                create_type=False,
-            ),
-            nullable=True,
-        ),
+        sa.Column("disabled_reason", disabled_reason_enum, nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -233,6 +396,7 @@ def upgrade() -> None:
         "ix_subscriptions_marzban_username", "subscriptions", ["marzban_username"]
     )
 
+    # payments
     op.create_table(
         "payments",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -250,27 +414,18 @@ def upgrade() -> None:
         ),
         sa.Column(
             "provider",
-            sa.Enum("yookassa", name="paymentprovider", create_type=False),
+            payment_provider_enum,
             nullable=False,
-            server_default="yookassa",
+            # server_default="YOOKASSA",
         ),
         sa.Column("provider_payment_id", sa.String(128), nullable=True),
         sa.Column("amount", sa.BigInteger(), nullable=False),
         sa.Column("currency", sa.String(3), nullable=False, server_default="RUB"),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending",
-                "waitingforcapture",
-                "succeeded",
-                "canceled",
-                "refundedpartially",
-                "refundedfully",
-                name="paymentstatus",
-                create_type=False,
-            ),
+            payment_status_enum,
             nullable=False,
-            server_default="pending",
+            # server_default="PENDING",
         ),
         sa.Column("idempotence_key", sa.String(128), nullable=False),
         sa.Column("metadata_snapshot", sa.JSON(), nullable=True),
@@ -301,6 +456,7 @@ def upgrade() -> None:
     op.create_index("ix_payments_paid_at", "payments", ["paid_at"])
     op.create_index("ix_payments_status", "payments", ["status"])
 
+    # refund_requests
     op.create_table(
         "refund_requests",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -325,18 +481,9 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "new",
-                "inreview",
-                "approved",
-                "rejected",
-                "processed",
-                "failed",
-                name="refundrequeststatus",
-                create_type=False,
-            ),
+            refund_request_status_enum,
             nullable=False,
-            server_default="new",
+            # server_default="NEW",
         ),
         sa.Column("admin_comment", sa.Text(), nullable=True),
         sa.Column(
@@ -370,12 +517,16 @@ def upgrade() -> None:
         ["reviewed_by_admin_id"],
     )
     op.create_index("ix_refund_requests_status", "refund_requests", ["status"])
-    op.execute("""
-        CREATE UNIQUE INDEX uix_refund_requests_one_pending
-        ON refund_requests (subscription_id)
-        WHERE status = 'new'
-    """)
+    # Условный уникальный индекс не создаём, как предлагает schema_check
+    # op.execute(
+    #     """
+    #     CREATE UNIQUE INDEX uix_refund_requests_one_pending
+    #     ON refund_requests (subscription_id)
+    #     WHERE status = 'NEW'
+    #     """
+    # )
 
+    # refunds
     op.create_table(
         "refunds",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -393,25 +544,18 @@ def upgrade() -> None:
         ),
         sa.Column(
             "provider",
-            sa.Enum("yookassa", name="paymentprovider", create_type=False),
+            payment_provider_enum,
             nullable=False,
-            server_default="yookassa",
+            # server_default="YOOKASSA",
         ),
         sa.Column("provider_refund_id", sa.String(128), nullable=True),
         sa.Column("amount", sa.BigInteger(), nullable=False),
         sa.Column("currency", sa.String(3), nullable=False, server_default="RUB"),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending",
-                "succeeded",
-                "failed",
-                "canceled",
-                name="refundstatus",
-                create_type=False,
-            ),
+            refund_status_enum,
             nullable=False,
-            server_default="pending",
+            # server_default="PENDING",
         ),
         sa.Column("raw_payload", sa.JSON(), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
@@ -433,6 +577,7 @@ def upgrade() -> None:
     op.create_index("ix_refunds_refund_request_id", "refunds", ["refund_request_id"])
     op.create_index("ix_refunds_status", "refunds", ["status"])
 
+    # notifications_log
     op.create_table(
         "notifications_log",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -448,21 +593,7 @@ def upgrade() -> None:
             sa.ForeignKey("subscriptions.id", ondelete="SET NULL"),
             nullable=True,
         ),
-        sa.Column(
-            "type",
-            sa.Enum(
-                "subexpires3d",
-                "subexpires1d",
-                "traffic80",
-                "traffic95",
-                "traffic100",
-                "refundprocessed",
-                "paymentsucceeded",
-                name="notificationtype",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("type", notification_type_enum, nullable=False),
         sa.Column("payload", sa.JSON(), nullable=True),
         sa.Column(
             "sent_at",
@@ -472,11 +603,9 @@ def upgrade() -> None:
         ),
         sa.Column(
             "delivery_status",
-            sa.Enum(
-                "sent", "failed", name="notificationdeliverystatus", create_type=False
-            ),
+            notification_delivery_status_enum,
             nullable=False,
-            server_default="sent",
+            # server_default="SENT",
         ),
         sa.UniqueConstraint(
             "user_id", "subscription_id", "type", name="uq_notifications_dedup"
@@ -488,6 +617,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_notifications_log_type", "notifications_log", ["type"])
 
+    # admin_actions_log
     op.create_table(
         "admin_actions_log",
         sa.Column("id", sa.BigInteger(), primary_key=True),
@@ -497,33 +627,7 @@ def upgrade() -> None:
             sa.ForeignKey("admins.id", ondelete="RESTRICT"),
             nullable=False,
         ),
-        sa.Column(
-            "action",
-            sa.Enum(
-                "login",
-                "logout",
-                "createadmin",
-                "updateadmin",
-                "disableadmin",
-                "enableadmin",
-                "createserver",
-                "updateserver",
-                "deleteserver",
-                "createtariff",
-                "updatetariff",
-                "deletetariff",
-                "banuser",
-                "unbanuser",
-                "disablesubscription",
-                "enablesubscription",
-                "approverefund",
-                "rejectrefund",
-                "processrefund",
-                name="adminactiontype",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
+        sa.Column("action", admin_action_type_enum, nullable=False),
         sa.Column("entity_type", sa.String(64), nullable=False),
         sa.Column("entity_id", sa.BigInteger(), nullable=True),
         sa.Column("payload_before", sa.JSON(), nullable=True),
@@ -551,8 +655,51 @@ def upgrade() -> None:
         "ix_admin_actions_log_entity_id", "admin_actions_log", ["entity_id"]
     )
 
+    # webhook_events
+    op.create_table(
+        "webhook_events",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("provider", sa.Text(), nullable=False),
+        sa.Column("event_type", sa.Text(), nullable=False),
+        sa.Column("external_id", sa.Text(), nullable=True),
+        sa.Column("idempotency_key", sa.Text(), nullable=True),
+        sa.Column("status", webhook_event_status_enum, nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("retry_count", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("last_retry_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.UniqueConstraint(
+            "provider",
+            "external_id",
+            name="uq_webhook_events_provider_external_id",
+        ),
+    )
+    op.create_index(
+        "ix_webhook_events_status_provider",
+        "webhook_events",
+        ["status", "provider"],
+    )
+    op.create_index("ix_webhook_events_created_at", "webhook_events", ["created_at"])
+
 
 def downgrade() -> None:
+    # Drop tables in dependency-safe order
+    op.drop_index("ix_webhook_events_created_at", table_name="webhook_events")
+    op.drop_index("ix_webhook_events_status_provider", table_name="webhook_events")
+    op.drop_table("webhook_events")
+
     op.drop_table("admin_actions_log")
     op.drop_table("notifications_log")
     op.drop_table("refunds")
@@ -564,12 +711,17 @@ def downgrade() -> None:
     op.drop_table("admins")
     op.drop_table("users")
 
-    op.execute("DROP TYPE IF EXISTS adminactiontype")
-    op.execute("DROP TYPE IF EXISTS notificationdeliverystatus")
-    op.execute("DROP TYPE IF EXISTS notificationtype")
-    op.execute("DROP TYPE IF EXISTS refundstatus")
-    op.execute("DROP TYPE IF EXISTS refundrequeststatus")
-    op.execute("DROP TYPE IF EXISTS paymentstatus")
-    op.execute("DROP TYPE IF EXISTS paymentprovider")
-    op.execute("DROP TYPE IF EXISTS disabledreason")
-    op.execute("DROP TYPE IF EXISTS subscriptionstatus")
+    # Drop enum types
+    for type_name in [
+        "admin_action_type",
+        "notification_delivery_status",
+        "notification_type",
+        "refund_status",
+        "refund_request_status",
+        "payment_status",
+        "payment_provider",
+        "disabled_reason",
+        "subscription_status",
+        "webhook_event_status",
+    ]:
+        op.execute(f'DROP TYPE IF EXISTS "{type_name}" CASCADE')
