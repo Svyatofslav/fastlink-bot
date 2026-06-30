@@ -5,7 +5,7 @@ from typing import Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "20240629_mark_servers_tokens_encrypted"
+revision: str = "20240629tokensenc"
 down_revision: Union[str, None] = "522f84617ca9"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
