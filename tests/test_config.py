@@ -3,6 +3,7 @@ from settings_schema import Settings
 
 def build_settings(**overrides) -> Settings:
     data = {
+        # В тестах по умолчанию работаем в режиме "development"
         "APP_ENV": "development",
         "APP_DEBUG": False,
         "LOG_LEVEL": "INFO",
@@ -13,6 +14,8 @@ def build_settings(**overrides) -> Settings:
         "POSTGRES_DB": "fastlink",
         "POSTGRES_USER": "fastlink",
         "POSTGRES_PASSWORD": "password",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PORT": 5432,
         "REDIS_PASSWORD": "redispass",
         "REDIS_HOST": "redis",
         "REDIS_PORT": 6379,
@@ -22,8 +25,6 @@ def build_settings(**overrides) -> Settings:
         "REDIS_RATE_LIMIT_DB": 3,
         "REDIS_PAYMENT_DB": 4,
         "REDIS_MARZBAN_TOKEN_DB": 5,
-        "DATABASE_URL": "postgresql+asyncpg://fastlink:password@postgres:5432/fastlink",
-        "DATABASE_URL_SYNC": "postgresql://fastlink:password@postgres:5432/fastlink",
         "REDIS_URL": "redis://:redispass@redis:6379/0",
         "REDIS_URL_FSM": "redis://:redispass@redis:6379/1",
         "REDIS_URL_CACHE": "redis://:redispass@redis:6379/2",
@@ -41,7 +42,7 @@ def build_settings(**overrides) -> Settings:
     return Settings(**data)
 
 
-def test_settings_computed_fields():
+def test_settings_computed_fields() -> None:
     settings = build_settings(
         WEBHOOK_BASE_URL="https://example.com/",
         WEBHOOK_PATH="/telegram/webhook",
@@ -52,7 +53,7 @@ def test_settings_computed_fields():
     assert settings.healthcheck_url_path == "/health"
 
 
-def test_settings_defaults():
+def test_settings_defaults() -> None:
     settings = build_settings()
 
     assert settings.bot_parse_mode == "HTML"
@@ -60,7 +61,7 @@ def test_settings_defaults():
     assert settings.use_webhook is False
 
 
-def test_is_production_flag():
+def test_is_production_flag() -> None:
     settings = build_settings(APP_ENV="production")
 
     assert settings.is_production is True

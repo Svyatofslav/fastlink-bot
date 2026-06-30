@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     postgres_user: str = Field(alias="POSTGRES_USER")
     postgres_password: str = Field(alias="POSTGRES_PASSWORD")
 
+    postgres_host: str = Field(default="postgres", alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+
     redis_password: str = Field(alias="REDIS_PASSWORD")
     redis_host: str = Field(alias="REDIS_HOST")
     redis_port: int = Field(alias="REDIS_PORT")
@@ -45,9 +48,6 @@ class Settings(BaseSettings):
     redis_rate_limit_db: int = Field(alias="REDIS_RATE_LIMIT_DB")
     redis_payment_db: int = Field(alias="REDIS_PAYMENT_DB")
     redis_marzban_token_db: int = Field(alias="REDIS_MARZBAN_TOKEN_DB")
-
-    database_url: str = Field(alias="DATABASE_URL")
-    database_url_sync: str = Field(alias="DATABASE_URL_SYNC")
 
     redis_url: str = Field(alias="REDIS_URL")
     redis_url_fsm: str = Field(alias="REDIS_URL_FSM")
@@ -115,6 +115,22 @@ class Settings(BaseSettings):
     @property
     def webhook_url(self) -> str:
         return f"{self.webhook_base_url.rstrip('/')}{self.webhook_path}"
+
+    @computed_field
+    @property
+    def database_url(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field
+    @property
+    def database_url_sync(self) -> str:
+        return (
+            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
     @computed_field
     @property

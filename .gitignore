@@ -54,3 +54,4 @@ tmp/
 
 # Local-only docker compose
 docker-compose.local.yml
+docker-compose.override.yml

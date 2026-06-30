@@ -19,6 +19,7 @@ from database.enums import (
     RefundRequestStatus,
     RefundStatus,
     SubscriptionStatus,
+    WebhookEventStatus,
 )
 
 
@@ -540,4 +541,47 @@ class AdminActionLog(TimestampMixin, Base):
         Index("ix_admin_actions_log_action", "action"),
         Index("ix_admin_actions_log_entity_type", "entity_type"),
         Index("ix_admin_actions_log_entity_id", "entity_id"),
+    )
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[WebhookEventStatus] = mapped_column(
+        SqlEnum(WebhookEventStatus, name="webhook_event_status"),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    last_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "external_id",
+            name="uq_webhook_events_provider_external_id",
+        ),
+        Index("ix_webhook_events_status_provider", "status", "provider"),
+        Index("ix_webhook_events_created_at", "created_at"),
     )
