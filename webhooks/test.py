@@ -5,7 +5,7 @@ from typing import Any
 import structlog
 from aiohttp import web
 
-from database.session import AsyncSessionFactory
+from database.session import get_async_session_factory
 from database.repo.webhook_events import WebhookEventsRepo
 
 
@@ -19,7 +19,8 @@ async def test_webhook(request: web.Request) -> web.Response:
         logger.warning("test_webhook_invalid_json")
         return web.Response(status=400, text="invalid json")
 
-    async with AsyncSessionFactory() as session:  # type: AsyncSession
+    factory = get_async_session_factory()
+    async with factory() as session:  # type: AsyncSession
         repo = WebhookEventsRepo(session=session)
         try:
             await repo.create_event(

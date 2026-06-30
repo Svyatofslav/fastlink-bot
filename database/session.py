@@ -6,12 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from database.engine import create_engine, create_test_engine
 
-# Ленивая инициализация фабрик сессий, чтобы не дёргать Settings() при импорте.
 _async_session_factory: async_sessionmaker[AsyncSession] | None = None
 _test_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
+def get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     global _async_session_factory
     if _async_session_factory is None:
         engine = create_engine()
@@ -23,7 +22,7 @@ def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     return _async_session_factory
 
 
-def _get_test_session_factory() -> async_sessionmaker[AsyncSession]:
+def get_test_session_factory() -> async_sessionmaker[AsyncSession]:
     global _test_session_factory
     if _test_session_factory is None:
         engine = create_test_engine()
@@ -35,11 +34,7 @@ def _get_test_session_factory() -> async_sessionmaker[AsyncSession]:
     return _test_session_factory
 
 
-# Сохраняем старые имена для совместимости с существующим кодом.
-AsyncSessionFactory = _get_async_session_factory()
-TestSessionFactory = _get_test_session_factory()
-
-
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionFactory() as session:
+    async_session_factory = get_async_session_factory()
+    async with async_session_factory() as session:
         yield session

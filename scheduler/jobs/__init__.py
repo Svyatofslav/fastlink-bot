@@ -4,14 +4,15 @@ from typing import Any
 
 import structlog
 
-from database.session import AsyncSessionFactory
+from database.session import get_async_session_factory
 from database.repo.webhook_events import WebhookEventsRepo
 
 logger = structlog.get_logger(__name__)
 
 
 async def process_webhook_events(provider: str = "test", limit: int = 100) -> None:
-    async with AsyncSessionFactory() as session:
+    factory = get_async_session_factory()
+    async with factory() as session:
         repo = WebhookEventsRepo(session=session)
         try:
             events = await repo.list_pending(provider=provider, limit=limit)
