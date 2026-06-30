@@ -93,7 +93,51 @@ jobs:
 
       - name: Run Alembic migrations
         env:
+          BOT_TOKEN: test-token
+          OWNER_TELEGRAM_ID: "123456789"
+
+          APP_ENV: test
+          APP_DEBUG: "false"
+          LOG_LEVEL: INFO
+
+          USE_WEBHOOK: "false"
+          SKIP_WEBHOOK_REGISTRATION: "true"
+          WEBHOOK_BASE_URL: http://localhost:8080
+          WEBHOOK_PATH: /webhook
+          WEBHOOK_SECRET: test_webhook_secret
+          HTTP_HOST: 0.0.0.0
+          HTTP_PORT: "8080"
+
+          POSTGRES_DB: fastlink
+          POSTGRES_USER: fastlink
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+          DATABASE_URL: postgresql+asyncpg://fastlink:testpassword@127.0.0.1:5432/fastlink
           DATABASE_URL_SYNC: postgresql://fastlink:testpassword@127.0.0.1:5432/fastlink
+
+          REDIS_PASSWORD: testredispassword
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: "6379"
+          REDIS_DB: "0"
+          REDIS_FSM_DB: "1"
+          REDIS_CACHE_DB: "2"
+          REDIS_RATE_LIMIT_DB: "3"
+          REDIS_PAYMENT_DB: "4"
+          REDIS_MARZBAN_TOKEN_DB: "5"
+          REDIS_URL: redis://:testredispassword@127.0.0.1:6379/0
+          REDIS_URL_FSM: redis://:testredispassword@127.0.0.1:6379/1
+          REDIS_URL_CACHE: redis://:testredispassword@127.0.0.1:6379/2
+          REDIS_URL_RATE_LIMIT: redis://:testredispassword@127.0.0.1:6379/3
+          REDIS_URL_PAYMENT: redis://:testredispassword@127.0.0.1:6379/4
+          REDIS_URL_MARZBAN_TOKEN: redis://:testredispassword@127.0.0.1:6379/5
+
+          MARZBAN_API_BASE: http://127.0.0.1:8000/api
+          MARZBAN_USERNAME: test_admin
+          MARZBAN_PASSWORD: test_password
+          METRICS_URL: http://127.0.0.1:9100/metrics
+          METRICS_TOKEN: test_metrics_token
+          FASTLINK_CRYPTO_MASTER_KEY: 99f46a69a38efde2bdcaaf8cda4a1aa209dbf9d33f3c7c37298dfa6a01d88720
         run: |
           alembic upgrade head
 
