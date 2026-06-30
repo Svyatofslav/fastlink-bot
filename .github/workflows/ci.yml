@@ -96,9 +96,23 @@ jobs:
           BOT_TOKEN: test-token
           OWNER_TELEGRAM_ID: "123456789"
 
+          APP_ENV: test
+          APP_DEBUG: "false"
+          LOG_LEVEL: INFO
+
+          USE_WEBHOOK: "false"
+          SKIP_WEBHOOK_REGISTRATION: "true"
+          WEBHOOK_BASE_URL: http://localhost:8080
+          WEBHOOK_PATH: /webhook
+          WEBHOOK_SECRET: test_webhook_secret
+          HTTP_HOST: 0.0.0.0
+          HTTP_PORT: "8080"
+
           POSTGRES_DB: fastlink
           POSTGRES_USER: fastlink
           POSTGRES_PASSWORD: testpassword
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
           DATABASE_URL: postgresql+asyncpg://fastlink:testpassword@127.0.0.1:5432/fastlink
           DATABASE_URL_SYNC: postgresql://fastlink:testpassword@127.0.0.1:5432/fastlink
 
