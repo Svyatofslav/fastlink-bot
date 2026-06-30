@@ -91,6 +91,12 @@ jobs:
       - name: Run Ruff
         run: ruff check .
 
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL_SYNC: postgresql://fastlink:testpassword@127.0.0.1:5432/fastlink
+        run: |
+          alembic upgrade head
+
       - name: Run Pytest
         env:
           BOT_TOKEN: test-token
