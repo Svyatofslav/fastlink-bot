@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from settings_schema import Settings
-from utils.crypto import derive_key_from_env  # новый импорт
+from utils.crypto import derive_key_from_env
 
 DEPLOY_COMMIT_SHORT_PATH = Path("/app/.deploy-commit-short")
 
@@ -31,6 +31,3 @@ def get_deploy_commit_short() -> str:
     except OSError:
         return "unknown"
     return value or "unknown"
-
-
-settings = get_settings()
