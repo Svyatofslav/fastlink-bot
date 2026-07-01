@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from config import get_settings
 
@@ -22,6 +22,8 @@ def create_test_engine() -> AsyncEngine:
     settings = get_settings()
     return create_async_engine(
         settings.database_url,
-        poolclass=NullPool,
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=1,
+        max_overflow=0,
         pool_pre_ping=False,
     )

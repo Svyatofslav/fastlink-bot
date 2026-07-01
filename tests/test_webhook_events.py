@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import WebhookEventStatus
 from database.models import WebhookEvent
 from database.repo.webhook_events import WebhookEventsRepo
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -21,6 +21,14 @@ async def test_create_event_and_idempotency(db_session: AsyncSession) -> None:
     )
     await db_session.commit()
 
+    # Явно читаем из БД — независимо от состояния объекта в памяти
+    await db_session.refresh(event1)
+    assert event1.status == WebhookEventStatus.RECEIVED, (
+        f"Expected RECEIVED right after creation, got {event1.status}"
+    )
+
+    event1_id = event1.id  # сохраняем до второго create_event
+
     event2 = await repo.create_event(
         provider="test",
         event_type="test.event",
@@ -29,10 +37,11 @@ async def test_create_event_and_idempotency(db_session: AsyncSession) -> None:
     )
     await db_session.commit()
 
-    assert event1.id == event2.id
-    assert event1.provider == "test"
-    assert event1.external_id == "ext-1"
-    assert event1.status == WebhookEventStatus.RECEIVED
+    assert event1_id == event2.id, (
+        "Idempotency: same external_id must return same record"
+    )
+    assert event2.provider == "test"
+    assert event2.external_id == "ext-1"
 
 
 @pytest.mark.asyncio
