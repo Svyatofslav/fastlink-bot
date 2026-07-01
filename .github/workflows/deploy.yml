@@ -149,7 +149,6 @@ jobs:
             docker compose config --services
           "
 
-      # Dry-run остаётся только для проверки env/SSH, без rsync
       - name: Remote dry-run env validation
         if: steps.mode.outputs.dry_run == 'true'
         run: |
@@ -223,6 +222,8 @@ jobs:
             echo 'COMPOSE_PULL_DONE=yes'
             docker compose build bot worker
             echo 'COMPOSE_BUILD_DONE=yes'
+            docker compose run --rm bot alembic upgrade head
+            echo 'MIGRATIONS_DONE=yes'
             docker compose up -d --remove-orphans
             echo 'COMPOSE_UP_DONE=yes'
           "

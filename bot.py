@@ -14,7 +14,7 @@ from aiogram.types import Update
 from redis.asyncio import Redis
 
 from config import get_deploy_commit_short, settings
-from database.session import AsyncSessionFactory
+from database.session import get_async_session_factory
 from middlewares import DbSessionMiddleware, ThrottlingMiddleware, UserMiddleware
 from handlers import router as root_router
 from webhooks.test import test_webhook
@@ -34,7 +34,9 @@ def configure_logging() -> None:
 
 
 def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
-    db_session_middleware = DbSessionMiddleware(session_factory=AsyncSessionFactory)
+    db_session_middleware = DbSessionMiddleware(
+        session_factory=get_async_session_factory()
+    )
     user_middleware = UserMiddleware()
     throttling_middleware = ThrottlingMiddleware(redis=redis_rate_limit)
 
