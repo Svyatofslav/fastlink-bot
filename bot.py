@@ -15,7 +15,13 @@ from redis.asyncio import Redis
 
 from config import get_deploy_commit_short, settings
 from database.session import get_async_session_factory
-from middlewares import DbSessionMiddleware, ThrottlingMiddleware, UserMiddleware
+from middlewares import (
+    DbSessionMiddleware,
+    ThrottlingMiddleware,
+    UserMiddleware,
+    LoggingMiddleware,
+    AdminSessionMiddleware,
+)
 from handlers import router as root_router
 from webhooks.test import test_webhook
 
@@ -39,12 +45,24 @@ def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
     )
     user_middleware = UserMiddleware()
     throttling_middleware = ThrottlingMiddleware(redis=redis_rate_limit)
+    logging_middleware = LoggingMiddleware()
+    admin_session_middleware = AdminSessionMiddleware(
+        redis=redis_rate_limit,
+        settings=settings,
+    )
+
+    # Порядок: logging -> db_session -> user -> admin_session -> throttling
+    dp.message.middleware(logging_middleware)
+    dp.callback_query.middleware(logging_middleware)
 
     dp.message.middleware(db_session_middleware)
     dp.callback_query.middleware(db_session_middleware)
 
     dp.message.middleware(user_middleware)
     dp.callback_query.middleware(user_middleware)
+
+    dp.message.middleware(admin_session_middleware)
+    dp.callback_query.middleware(admin_session_middleware)
 
     dp.message.middleware(throttling_middleware)
     dp.callback_query.middleware(throttling_middleware)
