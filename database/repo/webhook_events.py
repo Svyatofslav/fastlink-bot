@@ -1,18 +1,19 @@
+# database/repo/webhook_events.py
+
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import WebhookEventStatus
 from database.models import WebhookEvent
+from database.repo.base import BaseRepo
 
 
-class WebhookEventsRepo:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+class WebhookEventsRepo(BaseRepo[WebhookEvent]):
+    model = WebhookEvent
 
     async def create_event(
         self,
@@ -29,12 +30,12 @@ class WebhookEventsRepo:
                 WebhookEvent.provider == provider,
                 WebhookEvent.external_id == external_id,
             )
-            result = await self._session.execute(stmt)
+            result = await self.session.execute(stmt)
             existing = result.scalars().first()
             if existing is not None:
                 return existing
 
-        event = WebhookEvent(
+        return await self.create(
             provider=provider,
             event_type=event_type,
             external_id=external_id,
@@ -42,10 +43,6 @@ class WebhookEventsRepo:
             status=status,
             payload=payload,
         )
-        self._session.add(event)
-        await self._session.flush()
-        await self._session.refresh(event)
-        return event
 
     async def list_pending(
         self,
@@ -60,7 +57,7 @@ class WebhookEventsRepo:
             stmt = stmt.where(WebhookEvent.provider == provider)
 
         stmt = stmt.order_by(WebhookEvent.created_at.asc()).limit(limit)
-        result = await self._session.execute(stmt)
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def mark_done(self, event_id: int) -> None:
@@ -72,7 +69,7 @@ class WebhookEventsRepo:
                 updated_at=datetime.now().astimezone(),
             )
         )
-        await self._session.execute(stmt)
+        await self.session.execute(stmt)
 
     async def mark_failed(self, event_id: int, error_message: str) -> None:
         now = datetime.now().astimezone()
@@ -87,4 +84,4 @@ class WebhookEventsRepo:
                 retry_count=WebhookEvent.retry_count + 1,
             )
         )
-        await self._session.execute(stmt)
+        await self.session.execute(stmt)
