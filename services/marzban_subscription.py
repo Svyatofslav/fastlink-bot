@@ -48,7 +48,7 @@ class SubscriptionMarzbanService:
         payload = MarzbanUserCreatePayload(
             username=subscription.marzban_username,
             inbound_tag=subscription.server.inbound_tag,
-            data_limit_bytes=subscription.datalimit_bytes,
+            data_limit_bytes=subscription.data_limit_bytes,
             expiry_timestamp=expiry_ts,
             enabled=True,
         )

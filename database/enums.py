@@ -88,3 +88,14 @@ class WebhookEventStatus(StrEnum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+
+
+class AdminEntityType(StrEnum):
+    ADMIN = "admin"
+    USER = "user"
+    SERVER = "server"
+    TARIFF = "tariff"
+    SUBSCRIPTION = "subscription"
+    PAYMENT = "payment"
+    REFUND_REQUEST = "refund_request"
+    REFUND = "refund"
