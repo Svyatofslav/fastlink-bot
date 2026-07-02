@@ -55,3 +55,8 @@ tmp/
 # Local-only docker compose
 docker-compose.local.yml
 docker-compose.override.yml
+
+# Локальный дамп проекта
+project_dump.txt
+*.dump.txt
+dump/
