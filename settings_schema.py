@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     redis_rate_limit_db: int = Field(alias="REDIS_RATE_LIMIT_DB")
     redis_payment_db: int = Field(alias="REDIS_PAYMENT_DB")
     redis_marzban_token_db: int = Field(alias="REDIS_MARZBAN_TOKEN_DB")
+    redis_taskqueue_db: int = Field(alias="REDIS_TASKQUEUE_DB")
 
     redis_url: str = Field(alias="REDIS_URL")
     redis_url_fsm: str = Field(alias="REDIS_URL_FSM")
@@ -55,6 +56,7 @@ class Settings(BaseSettings):
     redis_url_rate_limit: str = Field(alias="REDIS_URL_RATE_LIMIT")
     redis_url_payment: str = Field(alias="REDIS_URL_PAYMENT")
     redis_url_marzban_token: str = Field(alias="REDIS_URL_MARZBAN_TOKEN")
+    redis_url_taskqueue: str = Field(alias="REDIS_URL_TASKQUEUE")
 
     marzban_api_base: str = Field(alias="MARZBAN_API_BASE")
     marzban_username: str = Field(alias="MARZBAN_USERNAME")

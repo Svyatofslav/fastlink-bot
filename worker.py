@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 
 import structlog
+from arq.worker import run_worker as arq_run_worker
 
 from config import get_deploy_commit_short, settings
-from scheduler.runner import run_worker
+from tasks.worker_settings import WorkerSettings
 
 
 def configure_logging() -> None:
@@ -23,7 +23,7 @@ def configure_logging() -> None:
     )
 
 
-async def main() -> None:
+def main() -> None:
     configure_logging()
     logger = structlog.get_logger(__name__)
     logger.info(
@@ -31,8 +31,12 @@ async def main() -> None:
         env=settings.app_env,
         deploy_commit_short=get_deploy_commit_short(),
     )
-    await run_worker()
+    # arq_run_worker — синхронная функция, она сама создаёт event loop
+    # и подписывается на SIGINT/SIGTERM для graceful shutdown.
+    # Оборачивать её в asyncio.run/run_in_executor нельзя — это ломает
+    # создание event loop внутри arq.Worker.
+    arq_run_worker(WorkerSettings)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

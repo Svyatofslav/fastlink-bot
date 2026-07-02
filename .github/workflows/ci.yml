@@ -125,12 +125,14 @@ jobs:
           REDIS_RATE_LIMIT_DB: "3"
           REDIS_PAYMENT_DB: "4"
           REDIS_MARZBAN_TOKEN_DB: "5"
+          REDIS_TASKQUEUE_DB: "6"
           REDIS_URL: redis://:testredispassword@127.0.0.1:6379/0
           REDIS_URL_FSM: redis://:testredispassword@127.0.0.1:6379/1
           REDIS_URL_CACHE: redis://:testredispassword@127.0.0.1:6379/2
           REDIS_URL_RATE_LIMIT: redis://:testredispassword@127.0.0.1:6379/3
           REDIS_URL_PAYMENT: redis://:testredispassword@127.0.0.1:6379/4
           REDIS_URL_MARZBAN_TOKEN: redis://:testredispassword@127.0.0.1:6379/5
+          REDIS_URL_TASKQUEUE: redis://:testredispassword@127.0.0.1:6379/6
 
           MARZBAN_API_BASE: http://127.0.0.1:8000/api
           MARZBAN_USERNAME: test_admin
@@ -175,12 +177,14 @@ jobs:
           REDIS_RATE_LIMIT_DB: "3"
           REDIS_PAYMENT_DB: "4"
           REDIS_MARZBAN_TOKEN_DB: "5"
+          REDIS_TASKQUEUE_DB: "6"
           REDIS_URL: redis://:testredispassword@127.0.0.1:6379/0
           REDIS_URL_FSM: redis://:testredispassword@127.0.0.1:6379/1
           REDIS_URL_CACHE: redis://:testredispassword@127.0.0.1:6379/2
           REDIS_URL_RATE_LIMIT: redis://:testredispassword@127.0.0.1:6379/3
           REDIS_URL_PAYMENT: redis://:testredispassword@127.0.0.1:6379/4
           REDIS_URL_MARZBAN_TOKEN: redis://:testredispassword@127.0.0.1:6379/5
+          REDIS_URL_TASKQUEUE: redis://:testredispassword@127.0.0.1:6379/6
 
           MARZBAN_API_BASE: http://127.0.0.1:8000/api
           MARZBAN_USERNAME: test_admin
@@ -230,12 +234,14 @@ jobs:
           REDIS_RATE_LIMIT_DB=3
           REDIS_PAYMENT_DB=4
           REDIS_MARZBAN_TOKEN_DB=5
+          REDIS_TASKQUEUE_DB=6
           REDIS_URL=redis://:testredispassword@redis:6379/0
           REDIS_URL_FSM=redis://:testredispassword@redis:6379/1
           REDIS_URL_CACHE=redis://:testredispassword@redis:6379/2
           REDIS_URL_RATE_LIMIT=redis://:testredispassword@redis:6379/3
           REDIS_URL_PAYMENT=redis://:testredispassword@redis:6379/4
           REDIS_URL_MARZBAN_TOKEN=redis://:testredispassword@redis:6379/5
+          REDIS_URL_TASKQUEUE=redis://:testredispassword@redis:6379/6
           MARZBAN_API_BASE=http://host.docker.internal:8000/api
           MARZBAN_USERNAME=test_admin
           MARZBAN_PASSWORD=test_password
