@@ -41,7 +41,8 @@ dist/
 build/
 *.egg-info/
 
-# Docker local overrides
+# Docker local overrides / local-only compose
+docker-compose.local.yml
 docker-compose.override.yml
 
 # Local backups / temp
@@ -52,12 +53,10 @@ docker-compose.override.yml
 *~
 tmp/
 
-# Local-only docker compose
-docker-compose.local.yml
-docker-compose.override.yml
-
 # Локальный дамп проекта
 project_dump.txt
 *.dump.txt
 dump/
+
+# Deploy healthcheck marker
 .healthcheck-status
