@@ -270,8 +270,12 @@ jobs:
             set -e
             cd '$APP_DIR'
 
+            rm -f .healthcheck-status
+
             for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
               if curl -fsS http://127.0.0.1:8080/health | grep -q '\"status\": \"ok\"'; then
+                printf '%s\n' 'yes' > .healthcheck-status
+                echo \"Healthcheck attempt \$i succeeded\"
                 echo 'HEALTHCHECK_PASSED=yes'
                 exit 0
               fi
@@ -279,6 +283,7 @@ jobs:
               sleep 5
             done
 
+            printf '%s\n' 'no' > .healthcheck-status
             echo 'HEALTHCHECK_FAILED: /health did not return ok after retries'
             docker compose ps
             docker compose logs --tail=50 bot
@@ -319,6 +324,7 @@ jobs:
             echo 'FINAL_RUNNER_HEAD=$COMMIT_SHA'
             echo 'FINAL_REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
             echo 'FINAL_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
+
             if [ -z \"\$FINAL_GIT_STATUS\" ]; then
               echo 'FINAL_GIT_DIRTY=no'
             else
@@ -327,6 +333,12 @@ jobs:
               echo \"\$FINAL_GIT_STATUS\"
               echo 'FINAL_GIT_STATUS_END'
             fi
-            echo 'FINAL_HEALTHCHECK_PASSED=yes'
+
+            if [ -f .healthcheck-status ] && [ \"\$(cat .healthcheck-status)\" = 'yes' ]; then
+              echo 'FINAL_HEALTHCHECK_PASSED=yes'
+            else
+              echo 'FINAL_HEALTHCHECK_PASSED=no'
+            fi
+
             echo 'FINAL_SUMMARY_END'
           "
