@@ -46,3 +46,15 @@ Thumbs.db
 config.py.bak*
 docker-compose.yml.bak*
 requirements.txt.bak*
+
+# Docker compose files (not needed in image)
+docker-compose.yml
+docker-compose.*.yml
+
+# Local dumps / project backups
+project_dump.txt
+*.dump.txt
+dump/
+
+# Deploy healthcheck marker
+.healthcheck-status
