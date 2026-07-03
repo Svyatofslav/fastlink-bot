@@ -318,13 +318,21 @@ jobs:
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             set -e
             cd '$APP_DIR'
-            FINAL_GIT_STATUS=\"\$(git status --short || true)\"
 
             echo 'FINAL_SUMMARY_START'
             echo 'FINAL_RUNNER_HEAD=$COMMIT_SHA'
             echo 'FINAL_REMOTE_GIT_HEAD='\"\$(git rev-parse HEAD)\"
             echo 'FINAL_DEPLOY_MARKER='\"\$(cat .deploy-commit)\"
 
+            if [ -f .healthcheck-status ] && [ \"\$(cat .healthcheck-status)\" = 'yes' ]; then
+              echo 'FINAL_HEALTHCHECK_PASSED=yes'
+            else
+              echo 'FINAL_HEALTHCHECK_PASSED=no'
+            fi
+
+            rm -f .healthcheck-status
+
+            FINAL_GIT_STATUS=\"\$(git status --short || true)\"
             if [ -z \"\$FINAL_GIT_STATUS\" ]; then
               echo 'FINAL_GIT_DIRTY=no'
             else
@@ -332,12 +340,6 @@ jobs:
               echo 'FINAL_GIT_STATUS_START'
               echo \"\$FINAL_GIT_STATUS\"
               echo 'FINAL_GIT_STATUS_END'
-            fi
-
-            if [ -f .healthcheck-status ] && [ \"\$(cat .healthcheck-status)\" = 'yes' ]; then
-              echo 'FINAL_HEALTHCHECK_PASSED=yes'
-            else
-              echo 'FINAL_HEALTHCHECK_PASSED=no'
             fi
 
             echo 'FINAL_SUMMARY_END'

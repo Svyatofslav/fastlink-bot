@@ -60,3 +60,4 @@ docker-compose.override.yml
 project_dump.txt
 *.dump.txt
 dump/
+.healthcheck-status
