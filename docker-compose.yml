@@ -60,10 +60,6 @@ services:
       - bot-net
     volumes:
       - /var/lib/fastlink/postgres:/var/lib/postgresql/data
-      - ./database/views.sql:/docker-entrypoint-initdb.d/01-views.sql:ro
-      - ./database/functions.sql:/docker-entrypoint-initdb.d/02-functions.sql:ro
-      - ./database/triggers.sql:/docker-entrypoint-initdb.d/03-triggers.sql:ro
-      - ./database/indexes.sql:/docker-entrypoint-initdb.d/04-indexes.sql:ro
 
   redis:
     image: redis:7-alpine

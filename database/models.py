@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
@@ -318,7 +319,7 @@ class Payment(TimestampMixin, Base):
         String(128), unique=True, nullable=False
     )
     metadata_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )
     paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
@@ -446,7 +447,7 @@ class Refund(TimestampMixin, Base):
         nullable=False,
         default=RefundStatus.PENDING,
     )
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -483,7 +484,7 @@ class NotificationLog(Base):
         SqlEnum(NotificationType, name="notification_type"),
         nullable=False,
     )
-    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -528,8 +529,8 @@ class AdminActionLog(TimestampMixin, Base):
     )
     entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    payload_before: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    payload_after: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    payload_before: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    payload_after: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     admin: Mapped[Admin] = relationship(
@@ -556,7 +557,7 @@ class WebhookEvent(Base):
         SqlEnum(WebhookEventStatus, name="webhook_event_status"),
         nullable=False,
     )
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
@@ -584,4 +585,29 @@ class WebhookEvent(Base):
         ),
         Index("ix_webhook_events_status_provider", "status", "provider"),
         Index("ix_webhook_events_created_at", "created_at"),
+    )
+
+
+class WebhookEventAudit(Base):
+    __tablename__ = "webhook_events_audit"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    event_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("webhook_events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    old_row: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    new_row: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_webhook_events_audit_event_id", "event_id"),
+        Index("ix_webhook_events_audit_changed_at", "changed_at"),
     )

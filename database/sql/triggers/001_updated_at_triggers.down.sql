@@ -1,0 +1,11 @@
+DROP TRIGGER IF EXISTS trg_notifications_log_set_updated_at ON notifications_log;
+DROP TRIGGER IF EXISTS trg_webhook_events_set_updated_at ON webhook_events;
+DROP TRIGGER IF EXISTS trg_admin_actions_log_set_updated_at ON admin_actions_log;
+DROP TRIGGER IF EXISTS trg_refunds_set_updated_at ON refunds;
+DROP TRIGGER IF EXISTS trg_refund_requests_set_updated_at ON refund_requests;
+DROP TRIGGER IF EXISTS trg_payments_set_updated_at ON payments;
+DROP TRIGGER IF EXISTS trg_subscriptions_set_updated_at ON subscriptions;
+DROP TRIGGER IF EXISTS trg_tariffs_set_updated_at ON tariffs;
+DROP TRIGGER IF EXISTS trg_servers_set_updated_at ON servers;
+DROP TRIGGER IF EXISTS trg_admins_set_updated_at ON admins;
+DROP TRIGGER IF EXISTS trg_users_set_updated_at ON users;
