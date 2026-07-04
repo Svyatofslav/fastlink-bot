@@ -11,6 +11,7 @@ from database.enums import SubscriptionStatus
 from database.repo.subscriptions import SubscriptionRepo
 from database.repo.servers import ServerRepo
 from database.repo.tariffs import TariffRepo
+from database.repo.users import UserRepo
 from database.repo.dto import ServerSecrets
 
 
@@ -22,6 +23,16 @@ async def test_activate_subscription_success(db_session: AsyncSession, monkeypat
     servers = ServerRepo(session=db_session)
     tariffs = TariffRepo(session=db_session)
     subs = SubscriptionRepo(session=db_session)
+    users = UserRepo(session=db_session)
+
+    # Создаём тестового пользователя, чтобы не ломать FK subscriptions.user_id
+    user = await users.create(
+        telegram_id=123456,
+        username="testuser",
+        first_name="Test",
+        last_name="User",
+        language_code="ru",
+    )
 
     server = await servers.create(
         name="test-server",
@@ -39,7 +50,7 @@ async def test_activate_subscription_success(db_session: AsyncSession, monkeypat
         price_amount=100,
     )
     subscription = await subs.create(
-        user_id=1,
+        user_id=user.id,
         server_id=server.id,
         tariff_id=tariff.id,
         marzban_username="test-user",
@@ -56,7 +67,6 @@ async def test_activate_subscription_success(db_session: AsyncSession, monkeypat
 
     service = SubscriptionMarzbanService(session=db_session)
 
-    # Мокаем секреты сервера
     fake_secrets = ServerSecrets(
         server_id=server.id,
         api_token="plain-api-token",
@@ -64,7 +74,6 @@ async def test_activate_subscription_success(db_session: AsyncSession, monkeypat
     )
     service._servers.get_server_secrets = AsyncMock(return_value=fake_secrets)
 
-    # Мокаем MarzbanClient: create_user асинхронный, build_subscription_url синхронный
     fake_client = AsyncMock(spec=MarzbanClient)
     fake_client.create_user = AsyncMock(
         return_value=MarzbanUserInfo(
@@ -96,6 +105,15 @@ async def test_activate_subscription_network_error(
     servers = ServerRepo(session=db_session)
     tariffs = TariffRepo(session=db_session)
     subs = SubscriptionRepo(session=db_session)
+    users = UserRepo(session=db_session)
+
+    user = await users.create(
+        telegram_id=234567,
+        username="testuser2",
+        first_name="Test2",
+        last_name="User2",
+        language_code="ru",
+    )
 
     server = await servers.create(
         name="test-server-2",
@@ -113,7 +131,7 @@ async def test_activate_subscription_network_error(
         price_amount=100,
     )
     subscription = await subs.create(
-        user_id=1,
+        user_id=user.id,
         server_id=server.id,
         tariff_id=tariff.id,
         marzban_username="test-user-2",
@@ -139,7 +157,6 @@ async def test_activate_subscription_network_error(
 
     fake_client = AsyncMock(spec=MarzbanClient)
     fake_client.create_user = AsyncMock(side_effect=Exception("network error"))
-    # build_subscription_url не используется в этом кейсе, но можно оставить как Mock
     fake_client.build_subscription_url = Mock(
         return_value="https://fastlinkproject.com/sub/test-user-2"
     )
