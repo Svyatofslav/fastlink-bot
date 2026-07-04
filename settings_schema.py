@@ -65,6 +65,14 @@ class Settings(BaseSettings):
         default=10,
         alias="MARZBAN_TIMEOUT_SECONDS",
     )
+    marzban_max_retries: int = Field(
+        default=2,
+        alias="MARZBAN_MAX_RETRIES",
+    )
+    marzban_backoff_base_seconds: float = Field(
+        default=0.5,
+        alias="MARZBAN_BACKOFF_BASE_SECONDS",
+    )
 
     metrics_url: str = Field(alias="METRICS_URL")
     metrics_token: str = Field(alias="METRICS_TOKEN")

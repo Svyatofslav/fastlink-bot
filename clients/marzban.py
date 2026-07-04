@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import random
 from dataclasses import dataclass
 
 import httpx
+import structlog
 
 from config import get_settings
 
@@ -40,6 +43,7 @@ class MarzbanClient:
 
     Использует httpx.AsyncClient, базовый URL и таймаут из Settings.
     Не хранит токены сервера — их выдаёт ServerRepo.get_server_secrets.
+    Реализует ограниченный retry для транзиентных ошибок.
     """
 
     def __init__(self, credentials: MarzbanCredentials | None = None) -> None:
@@ -54,6 +58,10 @@ class MarzbanClient:
             )
 
         self._creds = credentials
+        self._max_retries = settings.marzban_max_retries
+        self._backoff_base = settings.marzban_backoff_base_seconds
+        self._logger = structlog.get_logger(__name__)
+
         self._client = httpx.AsyncClient(
             base_url=self._creds.api_base.rstrip("/"),
             timeout=httpx.Timeout(self._creds.timeout_seconds),
@@ -64,6 +72,15 @@ class MarzbanClient:
         Закрыть HTTP-клиент (вызывать при остановке приложения/worker).
         """
         await self._client.aclose()
+
+    async def _sleep_with_backoff(self, attempt: int) -> None:
+        """
+        Экспоненциальный backoff с небольшим jitter, чтобы не долбить Marzban синхронно.
+        attempt: 0, 1, 2, ...
+        """
+        base_delay = self._backoff_base * (2**attempt)
+        jitter = random.uniform(0, self._backoff_base)
+        await asyncio.sleep(base_delay + jitter)
 
     async def _request(
         self,
@@ -79,6 +96,7 @@ class MarzbanClient:
 
         Добавляет базовую авторизацию и, при необходимости,
         bearer-токен конкретного сервера.
+        Реализует ограниченный retry для транзиентных ошибок (сетевые сбои, 5xx).
         """
         req_headers: dict[str, str] = headers.copy() if headers else {}
 
@@ -89,28 +107,72 @@ class MarzbanClient:
         if server_api_token:
             req_headers.setdefault("Authorization", f"Bearer {server_api_token}")
 
-        try:
-            resp = await self._client.request(
-                method=method,
-                url=path,
-                json=json,
-                headers=req_headers,
-                auth=auth,
-            )
-        except httpx.RequestError as exc:
-            raise MarzbanRequestError(f"Network error calling Marzban: {exc}") from exc
+        last_error: Exception | None = None
 
-        if resp.status_code in (401, 403):
-            raise MarzbanAuthError(
-                f"Marzban auth failed: status={resp.status_code}, body={resp.text}"
-            )
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = await self._client.request(
+                    method=method,
+                    url=path,
+                    json=json,
+                    headers=req_headers,
+                    auth=auth,
+                )
+            except httpx.RequestError as exc:
+                # Сетевая ошибка — повторяем в пределах max_retries
+                err = MarzbanRequestError(f"Network error calling Marzban: {exc}")
+                last_error = err
+                self._logger.warning(
+                    "marzban_request_network_error",
+                    method=method,
+                    path=path,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
+                    error=str(exc),
+                )
+                if attempt < self._max_retries:
+                    await self._sleep_with_backoff(attempt)
+                    continue
+                raise err
 
-        if resp.is_client_error or resp.is_server_error:
-            raise MarzbanRequestError(
-                f"Marzban error: status={resp.status_code}, body={resp.text}"
-            )
+            # Ошибки аутентификации/авторизации не ретраим
+            if resp.status_code in (401, 403):
+                raise MarzbanAuthError(
+                    f"Marzban auth failed: status={resp.status_code}, body={resp.text}"
+                )
 
-        return resp
+            # 5xx считаем транзиентными — пробуем повторить
+            if 500 <= resp.status_code:
+                err = MarzbanRequestError(
+                    f"Marzban server error: status={resp.status_code}, body={resp.text}"
+                )
+                last_error = err
+                self._logger.warning(
+                    "marzban_request_server_error",
+                    method=method,
+                    path=path,
+                    status_code=resp.status_code,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
+                )
+                if attempt < self._max_retries:
+                    await self._sleep_with_backoff(attempt)
+                    continue
+                raise err
+
+            # 4xx (кроме 401/403) — логическая ошибка, повторять бессмысленно
+            if 400 <= resp.status_code < 500:
+                raise MarzbanRequestError(
+                    f"Marzban client error: status={resp.status_code}, body={resp.text}"
+                )
+
+            # Успешный ответ
+            return resp
+
+        # На всякий случай, если цикл завершится без return
+        if last_error is not None:
+            raise last_error
+        raise MarzbanRequestError("Marzban request failed without specific error")
 
     def build_subscription_url(self, token: str) -> str:
         """
