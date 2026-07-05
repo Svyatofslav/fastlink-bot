@@ -22,6 +22,15 @@ _REFUND_EVENT_STATUS_MAP: dict[str, RefundStatus] = {
 
 
 async def process_webhook_events(provider: str = "test", limit: int = 100) -> None:
+    """
+    Батч-обработчик webhook-событий из таблицы webhook_events.
+
+    Важное свойство: идемпотентность на уровне провайдера обеспечивается
+    комбинацией:
+    - WebhookEventsRepo.create_event (не создаёт дубликаты по provider/external_id),
+    - PaymentService/RefundService (не выполняют действия повторно при уже
+      обработанных статусах).
+    """
     factory = get_async_session_factory()
     async with factory() as session:
         repo = WebhookEventsRepo(session=session)
@@ -59,8 +68,10 @@ async def handle_single_event(repo: WebhookEventsRepo, event: Any) -> None:
     """
     Разбирает одно webhook-событие и вызывает соответствующий сервис.
 
-    Исключения намеренно не гасятся — process_webhook_events сам
-    помечает событие FAILED и увеличивает retry_count.
+    Исключения намеренно не гасятся: если внутри PaymentService/RefundService
+    возникла ошибка (например, Payment/Refund не найден), событие помечается
+    FAILED и может быть ретраено позже. Повторные события с тем же external_id
+    безопасны за счёт идемпотентности самих сервисов.
     """
     session: AsyncSession = repo.session
 

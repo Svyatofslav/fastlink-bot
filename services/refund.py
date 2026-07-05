@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,6 +21,8 @@ from database.repo.payments import PaymentRepo
 from services.admin_actions import AdminActionLogService
 from services.notifications import NotificationService
 from services.subscription import SubscriptionService
+
+logger = structlog.get_logger(__name__)
 
 
 class RefundService:
@@ -163,12 +166,42 @@ class RefundService:
         - обновляем Payment.refunded_amount и Payment.status,
         - при успехе отключаем подписку (DisabledReason.REFUNDED),
         - отправляем пользователю уведомление REFUND_PROCESSED.
+
+        Идемпотентно: повторное событие с тем же status для уже завершённого
+        Refund не меняет состояние повторно и не задваивает суммы.
         """
         refund = await self._refunds.get_by_provider_refund_id(provider_refund_id)
         if refund is None:
             raise ValueError(
                 f"Refund with provider_refund_id={provider_refund_id} not found"
             )
+
+        if refund.status == status and refund.completed_at is not None:
+            logger.info(
+                "refund_event_already_processed",
+                refund_id=refund.id,
+                provider_refund_id=provider_refund_id,
+                status=status.value,
+            )
+            return refund
+
+        if (
+            refund.status
+            in (
+                RefundStatus.SUCCEEDED,
+                RefundStatus.FAILED,
+                RefundStatus.CANCELED,
+            )
+            and refund.status != status
+        ):
+            logger.warning(
+                "refund_status_transition_after_terminal_state",
+                refund_id=refund.id,
+                provider_refund_id=provider_refund_id,
+                current_status=refund.status.value,
+                incoming_status=status.value,
+            )
+            return refund
 
         now = datetime.now(timezone.utc)
 
