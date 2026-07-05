@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,8 @@ from database.models import Payment
 from database.repo.payments import PaymentRepo
 from services.notifications import NotificationService
 from services.subscription import SubscriptionService
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -112,12 +115,35 @@ class PaymentService:
         - проставляем статус SUCCEEDED, paid_at, metadata_snapshot,
         - при необходимости создаём или обновляем подписку,
         - инициируем уведомление PAYMENT_SUCCEEDED.
+
+        Идемпотентно: повторный вызов с уже обработанным provider_payment_id
+        (Payment.status == SUCCEEDED) не выполняет действия повторно.
         """
         payment = await self._payments.get_by_provider_payment_id(provider_payment_id)
         if payment is None:
             raise ValueError(
                 f"Payment with provider_payment_id={provider_payment_id} not found"
             )
+
+        if payment.status == PaymentStatus.SUCCEEDED:
+            logger.info(
+                "payment_already_succeeded",
+                payment_id=payment.id,
+                provider_payment_id=provider_payment_id,
+            )
+            return payment
+
+        if payment.status in (
+            PaymentStatus.REFUNDED_PARTIALLY,
+            PaymentStatus.REFUNDED_FULLY,
+        ):
+            logger.warning(
+                "payment_succeeded_event_after_refund",
+                payment_id=payment.id,
+                provider_payment_id=provider_payment_id,
+                current_status=payment.status.value,
+            )
+            return payment
 
         now = datetime.now(timezone.utc)
         payment = await self._payments.set_status(
@@ -169,12 +195,37 @@ class PaymentService:
     ) -> Payment:
         """
         Обработать отменённый платеж (CANCELED) со стороны провайдера.
+
+        Идемпотентно: повторный вызов с уже CANCELED платежом ничего не меняет.
+        Если платёж уже успел стать SUCCEEDED/REFUNDED_* (нестандартный порядок
+        событий от провайдера), статус не откатывается назад.
         """
         payment = await self._payments.get_by_provider_payment_id(provider_payment_id)
         if payment is None:
             raise ValueError(
                 f"Payment with provider_payment_id={provider_payment_id} not found"
             )
+
+        if payment.status == PaymentStatus.CANCELED:
+            logger.info(
+                "payment_already_canceled",
+                payment_id=payment.id,
+                provider_payment_id=provider_payment_id,
+            )
+            return payment
+
+        if payment.status in (
+            PaymentStatus.SUCCEEDED,
+            PaymentStatus.REFUNDED_PARTIALLY,
+            PaymentStatus.REFUNDED_FULLY,
+        ):
+            logger.warning(
+                "payment_canceled_event_after_succeeded",
+                payment_id=payment.id,
+                provider_payment_id=provider_payment_id,
+                current_status=payment.status.value,
+            )
+            return payment
 
         payment = await self._payments.set_status(
             payment,
