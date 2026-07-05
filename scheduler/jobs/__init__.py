@@ -7,7 +7,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import DisabledReason, RefundStatus
-from database.repo.webhook_events import WebhookEventsRepo
+from database.repo import WebhookEventsRepo
 from database.session import get_async_session_factory
 from services.payment import NewSubscriptionParams, PaymentService
 from services.refund import RefundService
@@ -25,46 +25,13 @@ _REFUND_EVENT_STATUS_MAP: dict[str, RefundStatus] = {
 
 
 async def process_webhook_events(provider: str = "test", limit: int = 100) -> None:
-    """
-    Батч-обработчик webhook-событий из таблицы webhook_events.
-
-    Важное свойство: идемпотентность на уровне провайдера обеспечивается
-    комбинацией:
-    - WebhookEventsRepo.create_event (не создаёт дубликаты по provider/external_id),
-    - PaymentService/RefundService (не выполняют действия повторно при уже
-      обработанных статусах).
-    """
     factory = get_async_session_factory()
     async with factory() as session:
-        repo = WebhookEventsRepo(session=session)
-        try:
-            events = await repo.list_pending(provider=provider, limit=limit)
-            if not events:
-                return
-
-            logger.info(
-                "webhook_events_processing_started",
-                provider=provider,
-                count=len(events),
-            )
-
-            for event in events:
-                try:
-                    await handle_single_event(repo, event)
-                    await repo.mark_done(event.id)
-                except Exception as exc:
-                    logger.exception(
-                        "webhook_event_processing_failed",
-                        event_id=event.id,
-                        provider=event.provider,
-                        exc_info=exc,
-                    )
-                    await repo.mark_failed(event.id, error_message=str(exc))
-
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            logger.exception("webhook_events_batch_failed")
+        await process_webhook_events_with_session(
+            session=session,
+            provider=provider,
+            limit=limit,
+        )
 
 
 async def handle_single_event(repo: WebhookEventsRepo, event: Any) -> None:
@@ -341,3 +308,39 @@ async def send_expiration_reminders_3d() -> None:
 
 async def send_expiration_reminders_1d() -> None:
     await _send_expiration_reminders(within_days=1)
+
+
+async def process_webhook_events_with_session(
+    session: AsyncSession,
+    provider: str = "test",
+    limit: int = 100,
+) -> None:
+    repo = WebhookEventsRepo(session=session)
+    try:
+        events = await repo.list_pending(provider=provider, limit=limit)
+        if not events:
+            return
+
+        logger.info(
+            "webhook_events_processing_started",
+            provider=provider,
+            count=len(events),
+        )
+
+        for event in events:
+            try:
+                await handle_single_event(repo, event)
+                await repo.mark_done(event.id)
+            except Exception as exc:
+                logger.exception(
+                    "webhook_event_processing_failed",
+                    event_id=event.id,
+                    provider=event.provider,
+                    exc_info=exc,
+                )
+                await repo.mark_failed(event.id, str(exc))
+
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception("webhook_events_batch_failed")
