@@ -1,223 +1,215 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.enums import NotificationDeliveryStatus, NotificationType
-from database.repo.notifications import NotificationRepo
+from database.enums import DisabledReason, SubscriptionStatus, AdminActionType
+from database.models import Subscription, Tariff, User
+from database.repo.subscriptions import SubscriptionRepo
+from database.repo.tariffs import TariffRepo
+from database.repo.users import UserRepo
+from services.admin_actions import AdminActionLogService
+from services.marzban_subscription import SubscriptionMarzbanService
+from services.notifications import NotificationService
 
 
-class NotificationService:
+TRAFFIC_THRESHOLD_80 = 80
+TRAFFIC_THRESHOLD_95 = 95
+TRAFFIC_THRESHOLD_100 = 100
+
+
+def _subscription_snapshot(subscription: Subscription) -> dict[str, Any]:
     """
-    Доменный сервис для работы с уведомлениями:
-    - дедупликация (was_sent / should_send),
-    - логирование успешных/неуспешных отправок,
-    - удобные методы под основные типы NotificationType.
+    Унифицированный snapshot подписки для аудита.
+    """
+    return {
+        "id": subscription.id,
+        "status": subscription.status.value,
+        "disabled_reason": (
+            subscription.disabled_reason.value
+            if subscription.disabled_reason is not None
+            else None
+        ),
+        "expires_at": (
+            subscription.expires_at.isoformat()
+            if subscription.expires_at is not None
+            else None
+        ),
+        "data_limit_bytes": subscription.data_limit_bytes,
+        "data_used_bytes": subscription.data_used_bytes,
+    }
+
+
+class SubscriptionService:
+    """
+    Application-уровневый сервис для работы с подписками FastLink.
+
+    Оркестрирует:
+    - создание подписки после успешного платежа,
+    - активацию (Marzban + статус ACTIVE),
+    - отключение/включение,
+    - обновление трафика и уведомления по high usage.
     """
 
     def __init__(self, session: AsyncSession) -> None:
-        self._repo = NotificationRepo(session)
+        self._session = session
+        self._subscriptions = SubscriptionRepo(session)
+        self._tariffs = TariffRepo(session)
+        self._users = UserRepo(session)
 
-    async def was_sent(
+        self._marzban = SubscriptionMarzbanService(session)
+        self._notifications = NotificationService(session)
+        self._admin_actions = AdminActionLogService(session)
+
+    async def create_for_payment(
         self,
         *,
         user_id: int,
-        notification_type: NotificationType,
-        subscription_id: int | None = None,
-    ) -> bool:
+        tariff_id: int,
+        server_id: int,
+        marzban_username: str,
+        starts_at: datetime | None,
+        expires_at: datetime,
+    ) -> Subscription:
         """
-        Проверить, было ли уже отправлено уведомление данного типа этому пользователю
-        (и, при необходимости, по конкретной подписке).
+        Создать подписку в статусе PENDING на основе оплаченного тарифа и сервера.
+
+        Предполагается вызов после SUCCEEDED платежа.
         """
-        return await self._repo.was_sent(
+        user: User | None = await self._users.get_by_id(user_id)
+        if user is None:
+            raise ValueError(f"User {user_id} not found")
+
+        tariff: Tariff | None = await self._tariffs.get_by_id(tariff_id)
+        if tariff is None:
+            raise ValueError(f"Tariff {tariff_id} not found")
+
+        data_limit_bytes = tariff.data_limit_bytes
+
+        subscription = await self._subscriptions.create(
             user_id=user_id,
-            notification_type=notification_type,
-            subscription_id=subscription_id,
+            server_id=server_id,
+            tariff_id=tariff_id,
+            marzban_username=marzban_username,
+            status=SubscriptionStatus.PENDING,
+            starts_at=starts_at,
+            expires_at=expires_at,
+            data_limit_bytes=data_limit_bytes,
+            data_used_bytes=0,
+            auto_renew=False,
+            subscription_url="",
+            disabled_reason=None,
         )
 
-    async def should_send(
-        self,
-        *,
-        user_id: int,
-        notification_type: NotificationType,
-        subscription_id: int | None = None,
-    ) -> bool:
-        """
-        Вернуть True, если уведомление ещё не отправлялось (с точки зрения дедупликации),
-        и его имеет смысл отправить.
-        """
-        already_sent = await self.was_sent(
-            user_id=user_id,
-            notification_type=notification_type,
-            subscription_id=subscription_id,
-        )
-        return not already_sent
+        return subscription
 
-    async def log_success(
+    async def activate(self, *, subscription_id: int) -> Subscription:
+        """
+        Активировать подписку: создать пользователя в Marzban и выставить статус ACTIVE.
+        """
+        subscription = await self._marzban.activate_subscription(subscription_id)
+        return subscription
+
+    async def disable(
         self,
         *,
-        user_id: int,
-        notification_type: NotificationType,
-        subscription_id: int | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> None:
+        subscription_id: int,
+        disabled_reason: DisabledReason,
+        admin_id: int | None = None,
+    ) -> Subscription:
         """
-        Залогировать успешную отправку уведомления.
+        Отключить подписку и пользователя в Marzban с заданной причиной.
         """
-        await self._repo.log(
-            user_id=user_id,
-            notification_type=notification_type,
-            delivery_status=NotificationDeliveryStatus.SENT,
+        subscription = await self._marzban.set_enabled(
             subscription_id=subscription_id,
-            payload=payload,
+            enabled=False,
+            disabled_reason=disabled_reason,
         )
 
-    async def log_failure(
+        if admin_id is not None:
+            await self._admin_actions.log_subscription_change(
+                admin_id=admin_id,
+                subscription_id=subscription_id,
+                action=AdminActionType.DISABLE_SUBSCRIPTION,
+                payload_before=None,
+                payload_after=_subscription_snapshot(subscription),
+                comment=f"Subscription disabled: {disabled_reason.value}",
+            )
+
+        return subscription
+
+    async def enable(
         self,
         *,
-        user_id: int,
-        notification_type: NotificationType,
-        subscription_id: int | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> None:
+        subscription_id: int,
+        admin_id: int | None = None,
+    ) -> Subscription:
         """
-        Залогировать неуспешную попытку отправки уведомления.
+        Включить подписку и пользователя в Marzban.
         """
-        await self._repo.log(
-            user_id=user_id,
-            notification_type=notification_type,
-            delivery_status=NotificationDeliveryStatus.FAILED,
+        subscription = await self._marzban.set_enabled(
             subscription_id=subscription_id,
-            payload=payload,
+            enabled=True,
+            disabled_reason=None,
         )
 
-    # Удобные методы под конкретные типы уведомлений
+        if admin_id is not None:
+            await self._admin_actions.log_subscription_change(
+                admin_id=admin_id,
+                subscription_id=subscription_id,
+                action=AdminActionType.ENABLE_SUBSCRIPTION,
+                payload_before=None,
+                payload_after=_subscription_snapshot(subscription),
+                comment="Subscription enabled",
+            )
 
-    async def notify_sub_expires_3d(
+        return subscription
+
+    async def update_traffic_with_notifications(
         self,
         *,
-        user_id: int,
         subscription_id: int,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
+        data_used_bytes: int,
+    ) -> Subscription:
         """
-        Подписка истекает через ~3 дня.
-        Возвращает True, если уведомление имеет смысл отправить (ещё не было).
+        Обновить трафик по подписке и, при необходимости, инициировать уведомления
+        о достижении порогов использования (80/95/100%).
         """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.SUB_EXPIRES_3D,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
+        subscription: Subscription | None = await self._subscriptions.get_by_id(
+            subscription_id
+        )
+        if subscription is None:
+            raise ValueError(f"Subscription {subscription_id} not found")
 
-    async def notify_sub_expires_1d(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Подписка истекает через ~1 день.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.SUB_EXPIRES_1D,
+        subscription = await self._marzban.sync_traffic(
             subscription_id=subscription_id,
-        ):
-            return False
-        return True
+            data_used_bytes=data_used_bytes,
+        )
 
-    async def notify_payment_succeeded(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Уведомление об успешном платеже.
-        Для платёжных уведомлений дедупликация по subscription_id может быть опциональной.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.PAYMENT_SUCCEEDED,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
+        if subscription.data_limit_bytes <= 0:
+            return subscription
 
-    async def notify_refund_processed(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Уведомление о завершённой обработке заявки на возврат.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.REFUND_PROCESSED,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
+        usage_percent = (
+            subscription.data_used_bytes * 100 // subscription.data_limit_bytes
+        )
+        user_id = subscription.user_id
 
-    async def notify_traffic_80(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Уведомление о достижении ~80% трафика.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.TRAFFIC_80,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
+        if TRAFFIC_THRESHOLD_80 <= usage_percent < TRAFFIC_THRESHOLD_95:
+            await self._notifications.notify_traffic_80(
+                user_id=user_id,
+                subscription_id=subscription.id,
+            )
+        elif TRAFFIC_THRESHOLD_95 <= usage_percent < TRAFFIC_THRESHOLD_100:
+            await self._notifications.notify_traffic_95(
+                user_id=user_id,
+                subscription_id=subscription.id,
+            )
+        elif usage_percent >= TRAFFIC_THRESHOLD_100:
+            await self._notifications.notify_traffic_100(
+                user_id=user_id,
+                subscription_id=subscription.id,
+            )
 
-    async def notify_traffic_95(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Уведомление о достижении ~95% трафика.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.TRAFFIC_95,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
-
-    async def notify_traffic_100(
-        self,
-        *,
-        user_id: int,
-        subscription_id: int,
-        payload: dict[str, Any] | None = None,
-    ) -> bool:
-        """
-        Уведомление о достижении ~100% трафика.
-        """
-        if not await self.should_send(
-            user_id=user_id,
-            notification_type=NotificationType.TRAFFIC_100,
-            subscription_id=subscription_id,
-        ):
-            return False
-        return True
+        return subscription

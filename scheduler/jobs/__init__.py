@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.session import get_async_session_factory
+from database.enums import RefundStatus
 from database.repo.webhook_events import WebhookEventsRepo
+from database.session import get_async_session_factory
+from services.payment import NewSubscriptionParams, PaymentService
+from services.refund import RefundService
 
 logger = structlog.get_logger(__name__)
+
+_REFUND_EVENT_STATUS_MAP: dict[str, RefundStatus] = {
+    "refund.succeeded": RefundStatus.SUCCEEDED,
+    "refund.canceled": RefundStatus.CANCELED,
+    "refund.failed": RefundStatus.FAILED,
+}
 
 
 async def process_webhook_events(provider: str = "test", limit: int = 100) -> None:
@@ -45,11 +56,193 @@ async def process_webhook_events(provider: str = "test", limit: int = 100) -> No
 
 
 async def handle_single_event(repo: WebhookEventsRepo, event: Any) -> None:
+    """
+    Разбирает одно webhook-событие и вызывает соответствующий сервис.
+
+    Исключения намеренно не гасятся — process_webhook_events сам
+    помечает событие FAILED и увеличивает retry_count.
+    """
+    session: AsyncSession = repo.session
+
+    payload: dict[str, Any] = event.payload if isinstance(event.payload, dict) else {}
+
     logger.info(
-        "webhook_event_processed",
+        "webhook_event_processing",
         event_id=event.id,
         provider=event.provider,
         event_type=event.event_type,
+        external_id=event.external_id,
     )
-    # Здесь позже появится реальная логика (YooKassa, Telegram и т.п.),
-    # сейчас это скелет, который просто логирует факт обработки.
+
+    if event.provider != "yookassa":
+        logger.warning(
+            "webhook_event_unknown_provider",
+            event_id=event.id,
+            provider=event.provider,
+        )
+        return
+
+    event_type = event.event_type
+
+    if event_type == "payment.succeeded":
+        await _handle_payment_succeeded(session, event, payload)
+    elif event_type == "payment.canceled":
+        await _handle_payment_canceled(session, event, payload)
+    elif event_type in _REFUND_EVENT_STATUS_MAP:
+        await _handle_refund_event(
+            session, event, payload, _REFUND_EVENT_STATUS_MAP[event_type]
+        )
+    else:
+        logger.warning(
+            "webhook_event_unhandled_type",
+            event_id=event.id,
+            provider=event.provider,
+            event_type=event_type,
+        )
+
+
+def _get_object(payload: dict[str, Any]) -> dict[str, Any]:
+    obj = payload.get("object")
+    if not isinstance(obj, dict):
+        raise ValueError("webhook payload missing 'object'")
+    return obj
+
+
+def _get_provider_payment_id(obj: dict[str, Any]) -> str:
+    provider_payment_id = obj.get("id")
+    if not provider_payment_id:
+        raise ValueError("payment object missing 'id'")
+    return str(provider_payment_id)
+
+
+def _get_metadata(obj: dict[str, Any]) -> dict[str, Any]:
+    metadata = obj.get("metadata")
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _build_metadata_snapshot(obj: dict[str, Any]) -> dict[str, Any]:
+    """Собирает только нужные поля из payment-объекта, без лишнего мусора."""
+    amount = obj.get("amount") or {}
+    return {
+        "amount_value": amount.get("value"),
+        "amount_currency": amount.get("currency"),
+        "paid": obj.get("paid"),
+        "description": obj.get("description"),
+        "metadata": _get_metadata(obj),
+    }
+
+
+def _parse_datetime(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _build_new_subscription_params(
+    metadata: dict[str, Any],
+) -> NewSubscriptionParams | None:
+    """
+    Строит параметры новой подписки, если продавец заранее положил их
+    в metadata платежа (tariff_id/server_id/marzban_username/expires_at).
+
+    Если ключей нет — считаем, что это оплата за уже существующую подписку.
+    """
+    required_keys = ("tariff_id", "server_id", "marzban_username", "expires_at")
+    if not all(key in metadata for key in required_keys):
+        return None
+
+    expires_at = _parse_datetime(metadata["expires_at"])
+    if expires_at is None:
+        raise ValueError("metadata.expires_at is missing or invalid")
+
+    return NewSubscriptionParams(
+        tariff_id=int(metadata["tariff_id"]),
+        server_id=int(metadata["server_id"]),
+        marzban_username=str(metadata["marzban_username"]),
+        starts_at=_parse_datetime(metadata.get("starts_at")),
+        expires_at=expires_at,
+    )
+
+
+async def _handle_payment_succeeded(
+    session: AsyncSession, event: Any, payload: dict[str, Any]
+) -> None:
+    obj = _get_object(payload)
+    provider_payment_id = _get_provider_payment_id(obj)
+    metadata = _get_metadata(obj)
+    metadata_snapshot = _build_metadata_snapshot(obj)
+    paid_at = _parse_datetime(obj.get("created_at")) or datetime.now(timezone.utc)
+
+    subscription_id_raw = metadata.get("subscription_id")
+    subscription_id = int(subscription_id_raw) if subscription_id_raw else None
+
+    new_subscription_params = (
+        _build_new_subscription_params(metadata) if subscription_id is None else None
+    )
+
+    logger.info(
+        "webhook_payment_succeeded",
+        event_id=event.id,
+        provider_payment_id=provider_payment_id,
+        subscription_id=subscription_id,
+        amount=metadata_snapshot.get("amount_value"),
+        currency=metadata_snapshot.get("amount_currency"),
+    )
+
+    payment_service = PaymentService(session)
+    await payment_service.process_successful_payment(
+        provider_payment_id=provider_payment_id,
+        paid_at=paid_at,
+        subscription_id=subscription_id,
+        metadata_snapshot=metadata_snapshot,
+        new_subscription_params=new_subscription_params,
+    )
+
+
+async def _handle_payment_canceled(
+    session: AsyncSession, event: Any, payload: dict[str, Any]
+) -> None:
+    obj = _get_object(payload)
+    provider_payment_id = _get_provider_payment_id(obj)
+    metadata_snapshot = _build_metadata_snapshot(obj)
+
+    logger.info(
+        "webhook_payment_canceled",
+        event_id=event.id,
+        provider_payment_id=provider_payment_id,
+    )
+
+    payment_service = PaymentService(session)
+    await payment_service.process_canceled_payment(
+        provider_payment_id=provider_payment_id,
+        metadata_snapshot=metadata_snapshot,
+    )
+
+
+async def _handle_refund_event(
+    session: AsyncSession,
+    event: Any,
+    payload: dict[str, Any],
+    status: RefundStatus,
+) -> None:
+    obj = _get_object(payload)
+    provider_refund_id = obj.get("id")
+    if not provider_refund_id:
+        raise ValueError("refund object missing 'id'")
+
+    logger.info(
+        "webhook_refund_event",
+        event_id=event.id,
+        provider_refund_id=provider_refund_id,
+        status=status.value,
+    )
+
+    refund_service = RefundService(session)
+    await refund_service.process_refund_result(
+        provider_refund_id=str(provider_refund_id),
+        status=status,
+        raw_payload=obj,
+    )
