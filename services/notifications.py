@@ -91,6 +91,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.SUB_EXPIRES_3D,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_sub_expires_1d(
@@ -106,6 +113,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.SUB_EXPIRES_1D,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_payment_succeeded(
@@ -121,6 +135,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.PAYMENT_SUCCEEDED,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_refund_processed(
@@ -136,6 +157,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.REFUND_PROCESSED,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_traffic_80(
@@ -151,6 +179,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.TRAFFIC_80,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_traffic_95(
@@ -166,6 +201,13 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.TRAFFIC_95,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
 
     async def notify_traffic_100(
@@ -181,4 +223,11 @@ class NotificationService:
             subscription_id=subscription_id,
         ):
             return False
+
+        await self.log_success(
+            user_id=user_id,
+            notification_type=NotificationType.TRAFFIC_100,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
         return True
