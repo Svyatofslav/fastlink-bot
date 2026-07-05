@@ -24,6 +24,7 @@ from middlewares import (
 )
 from handlers import router as root_router
 from webhooks.test import test_webhook
+from webhooks.yookassa import yookassa_webhook
 
 
 def configure_logging() -> None:
@@ -51,7 +52,6 @@ def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
         settings=settings,
     )
 
-    # Порядок: logging -> db_session -> user -> admin_session -> throttling
     dp.message.middleware(logging_middleware)
     dp.callback_query.middleware(logging_middleware)
 
@@ -89,6 +89,36 @@ async def telegram_webhook(request: web.Request) -> web.Response:
         logger.exception("webhook_processing_error")
 
     return web.Response(status=200, text="ok")
+
+
+def build_app(
+    *,
+    bot: Bot,
+    dp: Dispatcher,
+    redis_fsm: Redis,
+    redis_rate_limit: Redis,
+    include_telegram_webhook: bool,
+) -> web.Application:
+    """
+    Собирает aiohttp Application с общими служебными маршрутами.
+
+    include_telegram_webhook=True — добавляет /webhook (для продакшн webhook-режима).
+    include_telegram_webhook=False — сервис только health/yookassa/test (для polling-режима).
+    """
+    app = web.Application()
+    app["bot"] = bot
+    app["dp"] = dp
+    app["redis_fsm"] = redis_fsm
+    app["redis_rate_limit"] = redis_rate_limit
+
+    app.router.add_get(settings.healthcheck_url_path, healthcheck)
+    app.router.add_post("/webhook/test", test_webhook)
+    app.router.add_post("/payments/yookassa/webhook", yookassa_webhook)
+
+    if include_telegram_webhook:
+        app.router.add_post(settings.webhook_path, telegram_webhook)
+
+    return app
 
 
 async def on_startup(app: web.Application) -> None:
@@ -135,15 +165,13 @@ async def run_webhook_mode() -> None:
     setup_middlewares(dp, redis_rate_limit)
     dp.include_router(root_router)
 
-    app = web.Application()
-    app["bot"] = bot
-    app["dp"] = dp
-    app["redis_fsm"] = redis_fsm
-    app["redis_rate_limit"] = redis_rate_limit
-
-    app.router.add_get(settings.healthcheck_url_path, healthcheck)
-    app.router.add_post(settings.webhook_path, telegram_webhook)
-    app.router.add_post("/webhook/test", test_webhook)
+    app = build_app(
+        bot=bot,
+        dp=dp,
+        redis_fsm=redis_fsm,
+        redis_rate_limit=redis_rate_limit,
+        include_telegram_webhook=True,
+    )
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
 
@@ -169,6 +197,8 @@ async def run_webhook_mode() -> None:
 
 
 async def run_polling_mode() -> None:
+    logger = structlog.get_logger(__name__)
+
     redis_fsm = Redis.from_url(settings.redis_url_fsm)
     redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
 
@@ -181,9 +211,31 @@ async def run_polling_mode() -> None:
     setup_middlewares(dp, redis_rate_limit)
     dp.include_router(root_router)
 
+    # Локальный служебный веб-сервер: health + yookassa webhook + test webhook.
+    # Telegram-апдейты сюда НЕ идут — они получаются через long polling ниже.
+    app = build_app(
+        bot=bot,
+        dp=dp,
+        redis_fsm=redis_fsm,
+        redis_rate_limit=redis_rate_limit,
+        include_telegram_webhook=False,
+    )
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host=settings.http_host, port=settings.http_port)
+    await site.start()
+
+    logger.info(
+        "dev_web_server_started",
+        host=settings.http_host,
+        port=settings.http_port,
+        note="Служебный веб-сервер для локальной разработки (health/yookassa/test)",
+    )
+
     try:
         await dp.start_polling(bot)
     finally:
+        await runner.cleanup()
         await bot.session.close()
         await redis_fsm.aclose()
         await redis_rate_limit.aclose()
