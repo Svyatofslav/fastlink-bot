@@ -41,8 +41,7 @@ dist/
 build/
 *.egg-info/
 
-# Docker local overrides / local-only compose
-docker-compose.local.yml
+# Docker local overrides
 docker-compose.override.yml
 
 # Local backups / temp
