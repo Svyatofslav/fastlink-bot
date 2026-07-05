@@ -6,11 +6,14 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.enums import RefundStatus
+from database.enums import DisabledReason, RefundStatus
 from database.repo.webhook_events import WebhookEventsRepo
 from database.session import get_async_session_factory
 from services.payment import NewSubscriptionParams, PaymentService
 from services.refund import RefundService
+from services.subscription import SubscriptionService
+from services.notifications import NotificationService
+from database.repo.subscriptions import SubscriptionRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -257,3 +260,84 @@ async def _handle_refund_event(
         status=status,
         raw_payload=obj,
     )
+
+
+async def expire_overdue_subscriptions() -> None:
+    factory = get_async_session_factory()
+    async with factory() as session:
+        repo = SubscriptionRepo(session)
+        service = SubscriptionService(session)
+        try:
+            expired = await repo.get_expired()
+            if not expired:
+                return
+            logger.info("subscriptions_expire_started", count=len(expired))
+            for subscription in expired:
+                try:
+                    await service.disable(
+                        subscription_id=subscription.id,
+                        disabled_reason=DisabledReason.EXPIRED,
+                        admin_id=None,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "subscription_expire_failed",
+                        subscription_id=subscription.id,
+                        exc_info=exc,
+                    )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("subscriptions_expire_batch_failed")
+
+
+async def _send_expiration_reminders(within_days: int) -> None:
+    factory = get_async_session_factory()
+    notify_method_name = (
+        "notify_sub_expires_3d" if within_days == 3 else "notify_sub_expires_1d"
+    )
+    async with factory() as session:
+        repo = SubscriptionRepo(session)
+        notifications = NotificationService(session)
+        try:
+            expiring = await repo.get_expiring(within_days=within_days)
+            if not expiring:
+                return
+            logger.info(
+                "subscriptions_reminder_started",
+                within_days=within_days,
+                count=len(expiring),
+            )
+            notify = getattr(notifications, notify_method_name)
+            for subscription in expiring:
+                try:
+                    should_notify = await notify(
+                        user_id=subscription.user_id,
+                        subscription_id=subscription.id,
+                    )
+                    if should_notify:
+                        # TODO: фактическая отправка сообщения пользователю
+                        # (bot.send_message) + notifications.log_success/log_failure
+                        # добавится, когда будет готов слой доставки уведомлений.
+                        pass
+                except Exception as exc:
+                    logger.exception(
+                        "subscription_reminder_failed",
+                        subscription_id=subscription.id,
+                        within_days=within_days,
+                        exc_info=exc,
+                    )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception(
+                "subscriptions_reminder_batch_failed", within_days=within_days
+            )
+
+
+async def send_expiration_reminders_3d() -> None:
+    await _send_expiration_reminders(within_days=3)
+
+
+async def send_expiration_reminders_1d() -> None:
+    await _send_expiration_reminders(within_days=1)

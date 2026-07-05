@@ -9,6 +9,11 @@ from arq.connections import RedisSettings
 from config import get_deploy_commit_short
 from infrastructure.taskqueue.arq_impl import ArqTaskQueue, build_redis_settings
 from tasks.webhook_tasks import run_process_webhook_events
+from tasks.subscription_tasks import (
+    run_expire_overdue_subscriptions,
+    run_send_expiration_reminders_1d,
+    run_send_expiration_reminders_3d,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -30,11 +35,30 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 class WorkerSettings:
     redis_settings: RedisSettings = build_redis_settings()
-    functions = [run_process_webhook_events]
+    functions = [
+        run_process_webhook_events,
+        run_expire_overdue_subscriptions,
+        run_send_expiration_reminders_3d,
+        run_send_expiration_reminders_1d,
+    ]
     cron_jobs = [
         cron(
             run_process_webhook_events,
-            second=set(range(0, 60, 5)),  # каждые 5 секунд — как в старом WorkerRunner
+            second=set(range(0, 60, 5)),
+        ),
+        cron(
+            run_expire_overdue_subscriptions,
+            minute=set(range(0, 60, 15)),  # каждые 15 минут
+        ),
+        cron(
+            run_send_expiration_reminders_3d,
+            hour={9},  # раз в день, в 09:00
+            minute={0},
+        ),
+        cron(
+            run_send_expiration_reminders_1d,
+            hour={9},
+            minute={5},
         ),
     ]
     on_startup = startup
