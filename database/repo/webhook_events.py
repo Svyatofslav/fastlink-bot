@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from database.enums import WebhookEventStatus
 from database.models import WebhookEvent
@@ -25,6 +26,16 @@ class WebhookEventsRepo(BaseRepo[WebhookEvent]):
         idempotency_key: str | None = None,
         status: WebhookEventStatus = WebhookEventStatus.RECEIVED,
     ) -> WebhookEvent:
+        """
+        Идемпотентно по (provider, external_id): платёжный провайдер может
+        продублировать вебхук (retry при таймауте на нашей стороне), а два
+        конкурентных запроса/воркера могут обрабатывать один и тот же
+        входящий webhook параллельно. Pre-check SELECT сам по себе не
+        защищает от гонки между двумя параллельными вызовами — оборачиваем
+        INSERT в SAVEPOINT и ловим IntegrityError по
+        uq_webhook_events_provider_external_id, возвращая уже
+        существующую запись вместо падения наружу.
+        """
         if external_id is not None:
             stmt = select(WebhookEvent).where(
                 WebhookEvent.provider == provider,
@@ -35,14 +46,30 @@ class WebhookEventsRepo(BaseRepo[WebhookEvent]):
             if existing is not None:
                 return existing
 
-        return await self.create(
-            provider=provider,
-            event_type=event_type,
-            external_id=external_id,
-            idempotency_key=idempotency_key,
-            status=status,
-            payload=payload,
-        )
+        try:
+            async with self.session.begin_nested():
+                event = await self.create(
+                    provider=provider,
+                    event_type=event_type,
+                    external_id=external_id,
+                    idempotency_key=idempotency_key,
+                    status=status,
+                    payload=payload,
+                )
+        except IntegrityError:
+            if external_id is None:
+                raise
+            stmt = select(WebhookEvent).where(
+                WebhookEvent.provider == provider,
+                WebhookEvent.external_id == external_id,
+            )
+            result = await self.session.execute(stmt)
+            existing = result.scalars().first()
+            if existing is None:
+                raise
+            return existing
+
+        return event
 
     async def list_pending(
         self,
@@ -56,7 +83,11 @@ class WebhookEventsRepo(BaseRepo[WebhookEvent]):
         if provider is not None:
             stmt = stmt.where(WebhookEvent.provider == provider)
 
-        stmt = stmt.order_by(WebhookEvent.created_at.asc()).limit(limit)
+        stmt = (
+            stmt.order_by(WebhookEvent.created_at.asc())
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

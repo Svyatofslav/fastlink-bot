@@ -16,12 +16,13 @@ class NotificationRepo(BaseRepo[NotificationLog]):
         notification_type: NotificationType,
         subscription_id: int | None = None,
     ) -> bool:
-        query = select(NotificationLog).where(
+        query = select(NotificationLog.id).where(
             NotificationLog.user_id == user_id,
             NotificationLog.type == notification_type,
         )
         if subscription_id is not None:
             query = query.where(NotificationLog.subscription_id == subscription_id)
+        query = query.limit(1)
         result = await self.session.execute(query)
         return result.scalar_one_or_none() is not None
 

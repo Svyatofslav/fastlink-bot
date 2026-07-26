@@ -26,6 +26,11 @@ from handlers import router as root_router
 from webhooks.test import test_webhook
 from webhooks.yookassa import yookassa_webhook
 
+BOT_KEY: web.AppKey[Bot] = web.AppKey("bot", Bot)
+DP_KEY: web.AppKey[Dispatcher] = web.AppKey("dp", Dispatcher)
+REDIS_FSM_KEY: web.AppKey[Redis] = web.AppKey("redis_fsm", Redis)
+REDIS_RATE_LIMIT_KEY: web.AppKey[Redis] = web.AppKey("redis_rate_limit", Redis)
+
 
 def configure_logging() -> None:
     logging.basicConfig(
@@ -77,8 +82,8 @@ async def telegram_webhook(request: web.Request) -> web.Response:
     if secret != settings.webhook_secret:
         return web.Response(status=403, text="forbidden")
 
-    bot: Bot = request.app["bot"]
-    dp: Dispatcher = request.app["dp"]
+    bot: Bot = request.app[BOT_KEY]
+    dp: Dispatcher = request.app[DP_KEY]
 
     try:
         data = await request.json()
@@ -106,10 +111,10 @@ def build_app(
     include_telegram_webhook=False — сервис только health/yookassa/test (для polling-режима).
     """
     app = web.Application()
-    app["bot"] = bot
-    app["dp"] = dp
-    app["redis_fsm"] = redis_fsm
-    app["redis_rate_limit"] = redis_rate_limit
+    app[BOT_KEY] = bot
+    app[DP_KEY] = dp
+    app[REDIS_FSM_KEY] = redis_fsm
+    app[REDIS_RATE_LIMIT_KEY] = redis_rate_limit
 
     app.router.add_get(settings.healthcheck_url_path, healthcheck)
     app.router.add_post("/webhook/test", test_webhook)
@@ -123,7 +128,7 @@ def build_app(
 
 async def on_startup(app: web.Application) -> None:
     logger = structlog.get_logger(__name__)
-    bot: Bot = app["bot"]
+    bot: Bot = app[BOT_KEY]
 
     if settings.use_webhook and not settings.skip_webhook_registration:
         await bot.set_webhook(
@@ -137,9 +142,9 @@ async def on_startup(app: web.Application) -> None:
 
 
 async def on_shutdown(app: web.Application) -> None:
-    bot: Bot = app["bot"]
-    redis_fsm: Redis = app["redis_fsm"]
-    redis_rate_limit: Redis = app["redis_rate_limit"]
+    bot: Bot = app[BOT_KEY]
+    redis_fsm: Redis = app[REDIS_FSM_KEY]
+    redis_rate_limit: Redis = app[REDIS_RATE_LIMIT_KEY]
 
     with suppress(Exception):
         if settings.use_webhook:

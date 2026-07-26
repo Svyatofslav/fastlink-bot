@@ -53,14 +53,14 @@ async def test_process_successful_payment_idempotent(db_session: AsyncSession) -
         currency="RUB",
         provider=PaymentProvider.YOOKASSA,
         subscription_id=None,
-        idempotence_key="idem-1",
+        idempotency_key="idem-1",
         metadata_snapshot=None,
     )
     await db_session.commit()
     await db_session.refresh(payment)
 
-    assert payment.status == PaymentStatus.PENDING
-    assert payment.provider_payment_id is None
+    assert payment.provider_payment_id is not None
+    assert payment.confirmation_url is not None
 
     # 2. Привязываем provider_payment_id, как после инициализации у провайдера
     payment = await payment_service.attach_provider_payment_id(
@@ -89,16 +89,11 @@ async def test_process_successful_payment_idempotent(db_session: AsyncSession) -
     first_paid_at = payment_1.paid_at
 
     # Эмулируем реальную отправку уведомления:
-    if await notification_service.notify_payment_succeeded(
+    first_notify_sent = await notification_service.notify_payment_succeeded(
         user_id=user_id,
         subscription_id=payment_1.subscription_id,
-    ):
-        await notification_service.log_success(
-            user_id=user_id,
-            notification_type=NotificationType.PAYMENT_SUCCEEDED,
-            subscription_id=payment_1.subscription_id,
-            payload={"payment_id": payment_1.id},
-        )
+    )
+    assert first_notify_sent is True
     await db_session.commit()
 
     # 4. Второй вызов process_successful_payment с тем же provider_payment_id

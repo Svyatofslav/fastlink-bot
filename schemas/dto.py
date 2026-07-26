@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SubscriptionSummary(BaseModel):
@@ -51,3 +51,27 @@ class NotificationTaskDTO(BaseModel):
         None,
         description="Произвольные данные для шаблона уведомления.",
     )
+
+
+class NewSubscriptionParams(BaseModel):
+    """DTO для создания Subscription внутри PaymentService.process_successful_payment.
+
+    Строится из metadata_snapshot платежа (scheduler/jobs/__init__.py:
+    build_new_subscription_params). Валидация здесь защищает от кривых
+    данных, случайно попавших в JSONB-снэпшот вебхука.
+    """
+
+    model_config = {"frozen": True}
+
+    tariff_id: int = Field(..., gt=0)
+    server_id: int = Field(..., gt=0)
+    marzban_username: str = Field(..., min_length=1, max_length=128)
+    starts_at: datetime | None = None
+    expires_at: datetime
+
+    @field_validator("expires_at")
+    @classmethod
+    def expires_at_must_be_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("expires_at must be timezone-aware")
+        return v

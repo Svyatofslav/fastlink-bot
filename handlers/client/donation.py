@@ -1,0 +1,124 @@
+from __future__ import annotations
+import uuid
+import structlog
+from aiogram import Router, F
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
+from database.enums import PaymentProvider
+from database.models import User
+from keyboards.client import (
+    CB_MENU_DONATE,
+    CB_DONATION_CANCEL,
+    payment_kb,
+    donation_amount_kb,
+)
+
+from services.payment import PaymentService
+from states.donation import DonationStates, DATA_DONATION_PAYMENT_IN_PROGRESS
+from domain.donation_metadata import build_donation_metadata
+from handlers.client.menu import render_main_menu
+from utils.format import format_price, parse_price
+from utils.i18n import t
+
+router = Router(name="client-donation")
+logger = structlog.get_logger(__name__)
+
+
+@router.callback_query(lambda c: c.data == CB_MENU_DONATE)
+async def on_donate_clicked(
+    callback: CallbackQuery, state: FSMContext, user: User
+) -> None:
+    lang = user.language_code or "ru"
+    await state.set_state(DonationStates.waiting_for_amount)
+    min_price = format_price(settings.donation_min_amount)
+    max_price = format_price(settings.donation_max_amount)
+    text = t("donation.ask_amount", lang, min_price=min_price, max_price=max_price)
+    await callback.message.edit_text(text, reply_markup=donation_amount_kb(user))
+    await callback.answer()
+
+
+@router.message(DonationStates.waiting_for_amount, F.text)
+async def on_donation_amount_entered(
+    message: Message, session: AsyncSession, state: FSMContext, user: User
+) -> None:
+    lang = user.language_code or "ru"
+    amount = parse_price(message.text)
+
+    if amount is None:
+        await message.answer(t("donation.invalid_amount", lang))
+        return
+
+    if amount < settings.donation_min_amount:
+        await message.answer(
+            t(
+                "donation.amount_too_small",
+                lang,
+                min_price=format_price(settings.donation_min_amount),
+            )
+        )
+        return
+
+    if amount > settings.donation_max_amount:
+        await message.answer(
+            t(
+                "donation.amount_too_large",
+                lang,
+                max_price=format_price(settings.donation_max_amount),
+            )
+        )
+        return
+
+    data = await state.get_data()
+    if data.get(DATA_DONATION_PAYMENT_IN_PROGRESS):
+        await message.answer(t("purchase.payment_in_progress", lang))
+        return
+
+    await state.update_data({DATA_DONATION_PAYMENT_IN_PROGRESS: True})
+
+    idempotency_key = str(uuid.uuid4())
+    metadata_snapshot = build_donation_metadata(
+        user=user, amount=amount, currency="RUB"
+    )
+
+    payment_service = PaymentService(session)
+    try:
+        payment = await payment_service.create_payment(
+            user_id=user.id,
+            amount=amount,
+            currency="RUB",
+            provider=PaymentProvider.YOOKASSA,
+            subscription_id=None,
+            idempotency_key=idempotency_key,
+            metadata_snapshot=metadata_snapshot,
+        )
+    except Exception:
+        logger.exception(
+            "donation_create_payment_failed", user_id=user.id, amount=amount
+        )
+        await state.update_data({DATA_DONATION_PAYMENT_IN_PROGRESS: False})
+        await message.answer(t("purchase.create_failed", lang))
+        return
+
+    await state.set_state(DonationStates.awaiting_payment)
+    price = format_price(payment.amount, payment.currency)
+    text = t("donation.payment_created", lang, price=price)
+    await message.answer(
+        text, reply_markup=payment_kb(payment.id, payment.confirmation_url, user)
+    )
+
+
+@router.callback_query(lambda c: c.data == CB_DONATION_CANCEL)
+async def on_donation_cancel(
+    callback: CallbackQuery,
+    state: FSMContext,
+    user: User,
+    session: AsyncSession,
+) -> None:
+    await state.clear()
+    lang = user.language_code or "ru"
+    await callback.message.edit_text(t("purchase.cancelled", lang), reply_markup=None)
+    await render_main_menu(callback.message, user, session)
+    await callback.answer()

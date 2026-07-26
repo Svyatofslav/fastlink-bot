@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,6 +163,61 @@ class SubscriptionService:
                 payload_before=None,
                 payload_after=_subscription_snapshot(subscription),
                 comment="Subscription enabled",
+            )
+
+        return subscription
+
+    async def extend_for_payment(
+        self,
+        *,
+        subscription_id: int,
+        tariff_id: int,
+    ) -> Subscription:
+        """
+        Продлевает существующую подписку после успешной оплаты продления.
+
+        - expires_at сдвигается на tariff.duration_days от максимума
+          (текущий expires_at, now) — чтобы не терять уже оплаченные
+          дни при продлении заранее и не начислять их "в прошлое",
+          если подписка уже истекла.
+        - data_used_bytes сбрасывается в 0, data_limit_bytes берётся
+          из тарифа (на случай если тариф с тех пор поменялся).
+        - если подписка была DISABLED по причине EXPIRED, возвращаем
+          её в ACTIVE через Marzban.
+        """
+        subscription = await self._subscriptions.get_by_id(subscription_id)
+        if subscription is None:
+            raise ValueError(f"Subscription {subscription_id} not found")
+
+        tariff = await self._tariffs.get_by_id(tariff_id)
+        if tariff is None:
+            raise ValueError(f"Tariff {tariff_id} not found")
+
+        now = datetime.now(timezone.utc)
+        base = (
+            subscription.expires_at
+            if subscription.expires_at and subscription.expires_at > now
+            else now
+        )
+        new_expires_at = base + timedelta(days=tariff.duration_days)
+
+        was_expired_disabled = (
+            subscription.status == SubscriptionStatus.DISABLED
+            and subscription.disabled_reason == DisabledReason.EXPIRED
+        )
+
+        subscription = await self._subscriptions.update(
+            subscription,
+            expires_at=new_expires_at,
+            data_limit_bytes=tariff.data_limit_bytes,
+            data_used_bytes=0,
+        )
+
+        if was_expired_disabled:
+            subscription = await self._marzban.set_enabled(
+                subscription_id=subscription.id,
+                enabled=True,
+                disabled_reason=None,
             )
 
         return subscription

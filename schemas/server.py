@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class ServerCreatePayload(BaseModel):
     """
-    Входной payload для создания нового VPN-сервера.
+    Входной payload для создания нового VPN-сервера (локации).
 
     Источник: форма в админке.
     """
@@ -16,9 +16,9 @@ class ServerCreatePayload(BaseModel):
         max_length=64,
         description="Человекочитаемое имя сервера (для админки).",
     )
-    api_url: HttpUrl = Field(
+    marzban_node_id: int = Field(
         ...,
-        description="Базовый URL Marzban API, например https://host:8000/api.",
+        description="ID ноды в панели-мастере Marzban (Node Settings).",
     )
     inbound_tag: str = Field(
         ...,
@@ -51,9 +51,9 @@ class ServerUpdatePayload(BaseModel):
         max_length=64,
         description="Новое имя сервера или None, если не менять.",
     )
-    api_url: HttpUrl | None = Field(
+    marzban_node_id: int | None = Field(
         None,
-        description="Новый базовый URL Marzban API или None, если не менять.",
+        description="Новый ID ноды в панели-мастере Marzban или None, если не менять.",
     )
     inbound_tag: str | None = Field(
         None,
@@ -75,17 +75,13 @@ class ServerUpdatePayload(BaseModel):
 
 class ServerTokensUpdatePayload(BaseModel):
     """
-    Входной payload для установки/очистки токенов сервера.
+    Входной payload для установки/очистки metrics-токена сервера.
 
-    API/metrics токены валидируются и нормализуются ДО ServerRepo.set_server_tokens.
+    Marzban API токен больше не хранится per-server — используется
+    единая панель-мастер (Settings.marzban_*). Только metrics-agent
+    токен остаётся per-server.
     """
 
-    api_token: str | None = Field(
-        None,
-        min_length=16,
-        max_length=256,
-        description="Новый Marzban API token или None для очистки.",
-    )
     metrics_token: str | None = Field(
         None,
         min_length=16,
