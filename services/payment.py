@@ -1,32 +1,43 @@
 from __future__ import annotations
 
 import structlog
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from database.enums import PaymentProvider, PaymentStatus
 from database.models import Payment
 from database.repo.payments import PaymentRepo
 from services.notifications import NotificationService
 from services.subscription import SubscriptionService
+from schemas.dto import NewSubscriptionParams
+from clients.yookassa import FakeYooKassaClient, YooKassaClient, YooKassaClientError
+from config import get_settings
+from domain.purchase_metadata import build_yookassa_flat_metadata
+from domain.donation_metadata import build_yookassa_donation_flat_metadata
 
 logger = structlog.get_logger(__name__)
 
 
-@dataclass(frozen=True)
-class NewSubscriptionParams:
+def get_yookassa_client() -> YooKassaClient:
     """
-    Параметры для создания новой подписки после успешного платежа.
-    """
+    Фабрика клиента YooKassa.
 
-    tariff_id: int
-    server_id: int
-    marzban_username: str
-    starts_at: datetime | None
-    expires_at: datetime
+    Пока нет реальных ключей или интеграция выключена (флаг в settings),
+    возвращает FakeYooKassaClient, который не делает HTTP-запросов и
+    отдаёт предсказуемую confirmation_url.
+
+    Когда подключим боевую YooKassa, будет достаточно выставить флаг
+    в settings, чтобы вернулся реальный клиент.
+    """
+    settings = get_settings()
+    # Если у тебя ещё нет поля yookassa_enabled в Settings, можно временно
+    # считать его всегда False или завести с дефолтом False.
+    if not getattr(settings, "yookassa_enabled", False):
+        return FakeYooKassaClient()
+    return YooKassaClient()
 
 
 class PaymentService:
@@ -40,11 +51,14 @@ class PaymentService:
     - уведомления пользователя об успешном платеже.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self, session: AsyncSession, yookassa_client: YooKassaClient | None = None
+    ) -> None:
         self._session = session
         self._payments = PaymentRepo(session)
         self._notifications = NotificationService(session)
         self._subscriptions = SubscriptionService(session)
+        self._yookassa = yookassa_client or get_yookassa_client()
 
     async def create_payment(
         self,
@@ -54,29 +68,84 @@ class PaymentService:
         currency: str,
         provider: PaymentProvider = PaymentProvider.YOOKASSA,
         subscription_id: int | None = None,
-        idempotence_key: str,
+        idempotency_key: str,
         metadata_snapshot: dict[str, Any] | None = None,
     ) -> Payment:
         """
-        Создать запись Payment в статусе PENDING.
+        Создаёт Payment и платёжную ссылку у провайдера.
 
-        Предполагается, что после этого внешний код идёт к провайдеру
-        и инициализирует платёж (получает provider_payment_id, ссылку и т.п.).
+        Идемпотентно по idempotency_key: сначала пытаемся найти уже
+        существующий Payment (обычный повторный клик), а если гонка
+        всё же произошла между SELECT и INSERT — ловим IntegrityError
+        от уникального constraint payments.idempotence_key и отдаём
+        найденную по ключу запись вместо падения наружу. Паттерн
+        аналогичен WebhookEventsRepo.create_event для external_id.
         """
-        payment = await self._payments.create(
-            user_id=user_id,
-            subscription_id=subscription_id,
-            provider=provider,
-            provider_payment_id=None,
-            amount=amount,
-            currency=currency,
-            status=PaymentStatus.PENDING,
-            idempotence_key=idempotence_key,
-            metadata_snapshot=metadata_snapshot,
-            paid_at=None,
-            refundable=False,
-            refunded_amount=0,
+        existing = await self._payments.get_by_idempotence_key(idempotency_key)
+        if existing is not None:
+            logger.info(
+                "payment_idempotency_hit_before_insert",
+                payment_id=existing.id,
+                idempotency_key=idempotency_key,
+            )
+            return existing
+
+        try:
+            async with self._session.begin_nested():
+                payment = await self._payments.create(
+                    user_id=user_id,
+                    subscription_id=subscription_id,
+                    provider=provider,
+                    provider_payment_id=None,
+                    amount=amount,
+                    currency=currency,
+                    status=PaymentStatus.PENDING,
+                    idempotence_key=idempotency_key,
+                    metadata_snapshot=metadata_snapshot,
+                    paid_at=None,
+                    refundable=False,
+                    refunded_amount=0,
+                )
+        except IntegrityError:
+            logger.info(
+                "payment_idempotency_race_detected",
+                idempotency_key=idempotency_key,
+            )
+            existing = await self._payments.get_by_idempotence_key(idempotency_key)
+            if existing is None:
+                raise
+            return existing
+
+        await self._session.flush()
+
+        flat_metadata: dict[str, str] = {}
+        if metadata_snapshot is not None:
+            if metadata_snapshot.get("type") == "donation":
+                flat_metadata = build_yookassa_donation_flat_metadata(metadata_snapshot)
+            else:
+                flat_metadata = build_yookassa_flat_metadata(metadata_snapshot)
+
+        try:
+            link = await self._yookassa.create_payment_link(
+                amount=amount,
+                currency=currency,
+                description=f"FastLink payment #{payment.id}",
+                idempotency_key=idempotency_key,
+                return_url=self._build_return_url(payment.id),
+                metadata=flat_metadata,
+            )
+        except YooKassaClientError:
+            logger.exception(
+                "yookassa_create_payment_link_failed", payment_id=payment.id
+            )
+            raise
+
+        payment = await self._payments.update(
+            payment,
+            provider_payment_id=link.provider_payment_id,
+            confirmation_url=link.confirmation_url,
         )
+
         return payment
 
     async def attach_provider_payment_id(
@@ -177,14 +246,6 @@ class PaymentService:
                 subscription_id=subscription.id,
             )
 
-        # Уведомление пользователя об успешном платеже.
-        if await self._notifications.notify_payment_succeeded(
-            user_id=payment.user_id,
-            subscription_id=payment.subscription_id,
-        ):
-            # После фактической отправки сообщения хендлер/сценарий должен вызвать log_success.
-            pass
-
         return payment
 
     async def process_canceled_payment(
@@ -238,3 +299,43 @@ class PaymentService:
         # через SubscriptionService.disable(..., disabled_reason=DisabledReason.PAYMENT_CANCELED),
         # когда будем дописывать сценарий.
         return payment
+
+    async def cancel_pending_payment(self, *, payment_id: int) -> Payment:
+        """
+        Отменить платёж по инициативе пользователя, пока он ещё PENDING.
+
+        Используется до подключения провайдера (clients/yookassa.py) —
+        process_canceled_payment здесь неприменим, так как ищет платёж
+        по provider_payment_id, которого ещё нет (интеграция не вызывалась).
+        Идемпотентно: если платёж уже не PENDING, просто возвращаем его как есть.
+        """
+        payment = await self._payments.get_by_id(payment_id)
+        if payment is None:
+            raise ValueError(f"Payment {payment_id} not found")
+
+        if payment.status != PaymentStatus.PENDING:
+            return payment
+
+        return await self._payments.set_status(
+            payment,
+            status=PaymentStatus.CANCELED,
+            refundable=False,
+        )
+
+    @staticmethod
+    def _build_return_url(payment_id: int) -> str:
+        """
+        Собирает URL, на который YooKassa вернёт пользователя после оплаты.
+
+        Сейчас это может быть deeplink бота, например:
+        https://t.me/<bot>?start=payment_<id>
+        Конкретный формат можно уточнить позже и вынести в settings.
+        """
+        settings = get_settings()
+        # Если в settings ещё нет bot_deep_link_base, можно временно захардкодить
+        # или добавить с дефолтом.
+        base = getattr(settings, "bot_deep_link_base", "")
+        if base:
+            return f"{base}?start=payment_{payment_id}"
+        # Временно возвращаем заглушку; в бою лучше всегда иметь валидный URL.
+        return "https://example.com/payment_return"

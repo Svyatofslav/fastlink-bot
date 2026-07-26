@@ -18,12 +18,12 @@ def create_engine() -> AsyncEngine:
     )
 
 
-def create_test_engine() -> AsyncEngine:
+def create_test_engine(pool_size: int = 1) -> AsyncEngine:
     settings = get_settings()
     return create_async_engine(
         settings.database_url,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=1,
+        pool_size=pool_size,
         max_overflow=0,
         pool_pre_ping=False,
     )

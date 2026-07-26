@@ -53,6 +53,8 @@ jobs:
       POSTGRES_USER: ${{ vars.POSTGRES_USER }}
       MARZBAN_USERNAME: ${{ vars.MARZBAN_USERNAME }}
 
+      SUPPORT_BOT_TOKEN: ${{ secrets.SUPPORT_BOT_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

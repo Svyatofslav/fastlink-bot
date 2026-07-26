@@ -22,10 +22,10 @@ def get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     return _async_session_factory
 
 
-def get_test_session_factory() -> async_sessionmaker[AsyncSession]:
+def get_test_session_factory(pool_size: int = 1) -> async_sessionmaker[AsyncSession]:
     global _test_session_factory
     if _test_session_factory is None:
-        engine = create_test_engine()
+        engine = create_test_engine(pool_size=pool_size)
         _test_session_factory = async_sessionmaker(
             bind=engine,
             class_=AsyncSession,

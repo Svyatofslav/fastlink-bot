@@ -8,17 +8,9 @@ Create Date: 2026-07-03 06:01:17.317070
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Union
 
 from alembic import op
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-SQL_DIR = BASE_DIR / "database" / "sql" / "indexes"
-
-
-def _read_sql(filename: str) -> str:
-    return (SQL_DIR / filename).read_text(encoding="utf-8")
 
 
 # revision identifiers, used by Alembic.
@@ -29,8 +21,26 @@ depends_on: Union[str, None] = None
 
 
 def upgrade() -> None:
-    op.execute(_read_sql("001_add_operational_indexes.up.sql"))
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_subscriptions_status_expires_at "
+        "ON subscriptions (status, expires_at);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_payments_user_created_at_desc "
+        "ON payments (user_id, created_at DESC);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_payments_subscription_created_at_desc "
+        "ON payments (subscription_id, created_at DESC);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_refund_requests_status_created_at_desc "
+        "ON refund_requests (status, created_at DESC);"
+    )
 
 
 def downgrade() -> None:
-    op.execute(_read_sql("001_add_operational_indexes.down.sql"))
+    op.execute("DROP INDEX IF EXISTS ix_refund_requests_status_created_at_desc;")
+    op.execute("DROP INDEX IF EXISTS ix_payments_subscription_created_at_desc;")
+    op.execute("DROP INDEX IF EXISTS ix_payments_user_created_at_desc;")
+    op.execute("DROP INDEX IF EXISTS ix_subscriptions_status_expires_at;")

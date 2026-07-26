@@ -13,6 +13,8 @@ class UserMiddleware(BaseMiddleware):
     """
     Получает или создаёт пользователя по telegram_id.
     Кладёт объект User в data["user"].
+    Кладёт булев флаг data["user_created"] — True, если пользователь
+    был создан именно в рамках текущего апдейта.
     Обновляет профиль если изменился.
     Блокирует забаненных — они не попадают в handlers.
 
@@ -48,5 +50,6 @@ class UserMiddleware(BaseMiddleware):
 
         await repo.set_last_active(user)
         data["user"] = user
+        data["user_created"] = created
 
         return await handler(event, data)

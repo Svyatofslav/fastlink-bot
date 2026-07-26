@@ -96,6 +96,17 @@ class Settings(BaseSettings):
     yookassa_shop_id: str = Field(default="", alias="YOOKASSA_SHOP_ID")
     yookassa_secret_key: str = Field(default="", alias="YOOKASSA_SECRET_KEY")
 
+    donation_min_amount: int = Field(
+        default=5000,
+        ge=1,
+        alias="DONATION_MIN_AMOUNT_KOPECKS",
+    )
+    donation_max_amount: int = Field(
+        default=5_000_000,
+        ge=1,
+        alias="DONATION_MAX_AMOUNT_KOPECKS",
+    )
+
     feature_admin_enabled: bool = Field(
         default=True,
         alias="FEATURE_ADMIN_ENABLED",
@@ -107,6 +118,12 @@ class Settings(BaseSettings):
     feature_refunds_enabled: bool = Field(
         default=False,
         alias="FEATURE_REFUNDS_ENABLED",
+    )
+    support_bot_token: str = Field(default="", alias="SUPPORT_BOT_TOKEN")
+    support_bot_username: str = Field(default="", alias="SUPPORT_BOT_USERNAME")
+    feature_support_enabled: bool = Field(
+        default=True,
+        alias="FEATURE_SUPPORT_ENABLED",
     )
 
     db_pool_size: int = 10
@@ -148,3 +165,8 @@ class Settings(BaseSettings):
         if self.healthcheck_path.startswith("/"):
             return self.healthcheck_path
         return f"/{self.healthcheck_path}"
+
+    @computed_field
+    @property
+    def support_bot_deep_link_base(self) -> str:
+        return f"https://t.me/{self.support_bot_username}"

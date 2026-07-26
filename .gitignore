@@ -53,7 +53,7 @@ docker-compose.override.yml
 tmp/
 
 # Локальный дамп проекта
-project_dump.txt
+project_dump_1.txt
 *.dump.txt
 dump/
 

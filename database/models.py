@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, desc
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -20,6 +20,9 @@ from database.enums import (
     RefundRequestStatus,
     RefundStatus,
     SubscriptionStatus,
+    SupportSenderType,
+    SupportTicketCategory,
+    SupportTicketStatus,
     WebhookEventStatus,
 )
 
@@ -60,6 +63,9 @@ class User(TimestampMixin, Base):
     last_active_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    last_active_message_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
 
     subscriptions: Mapped[list[Subscription]] = relationship(
         back_populates="user",
@@ -77,6 +83,11 @@ class User(TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     notifications: Mapped[list[NotificationLog]] = relationship(
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    support_tickets: Mapped[list[SupportTicket]] = relationship(
         back_populates="user",
         lazy="selectin",
         cascade="all, delete-orphan",
@@ -123,6 +134,10 @@ class Admin(TimestampMixin, Base):
         back_populates="admin",
         lazy="selectin",
     )
+    assigned_support_tickets: Mapped[list[SupportTicket]] = relationship(
+        back_populates="assigned_admin",
+        lazy="selectin",
+    )
 
 
 class Server(TimestampMixin, Base):
@@ -133,8 +148,7 @@ class Server(TimestampMixin, Base):
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
     country_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     emoji: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    api_url: Mapped[str] = mapped_column(Text, nullable=False)
-    api_token: Mapped[str] = mapped_column(Text, nullable=False)
+    marzban_node_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     metrics_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     metrics_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     inbound_tag: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -271,6 +285,10 @@ class Subscription(TimestampMixin, Base):
         back_populates="subscription",
         lazy="selectin",
     )
+    support_tickets: Mapped[list[SupportTicket]] = relationship(
+        back_populates="subscription",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -279,6 +297,7 @@ class Subscription(TimestampMixin, Base):
         Index("ix_subscriptions_status", "status"),
         Index("ix_subscriptions_user_status", "user_id", "status"),
         Index("ix_subscriptions_marzban_username", "marzban_username"),
+        Index("ix_subscriptions_status_expires_at", "status", "expires_at"),
     )
 
 
@@ -306,6 +325,7 @@ class Payment(TimestampMixin, Base):
     provider_payment_id: Mapped[str | None] = mapped_column(
         String(128), unique=True, nullable=True
     )
+    confirmation_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default="RUB"
@@ -347,8 +367,20 @@ class Payment(TimestampMixin, Base):
         back_populates="payment",
         lazy="selectin",
     )
+    support_tickets: Mapped[list[SupportTicket]] = relationship(
+        back_populates="payment",
+        lazy="selectin",
+    )
 
-    __table_args__ = (Index("ix_payments_status", "status"),)
+    __table_args__ = (
+        Index("ix_payments_status", "status"),
+        Index("ix_payments_user_created_at_desc", "user_id", desc("created_at")),
+        Index(
+            "ix_payments_subscription_created_at_desc",
+            "subscription_id",
+            desc("created_at"),
+        ),
+    )
 
 
 class RefundRequest(TimestampMixin, Base):
@@ -411,7 +443,14 @@ class RefundRequest(TimestampMixin, Base):
         lazy="selectin",
     )
 
-    __table_args__ = (Index("ix_refund_requests_status", "status"),)
+    __table_args__ = (
+        Index("ix_refund_requests_status", "status"),
+        Index(
+            "ix_refund_requests_status_created_at_desc",
+            "status",
+            desc("created_at"),
+        ),
+    )
 
 
 class Refund(TimestampMixin, Base):
@@ -462,6 +501,114 @@ class Refund(TimestampMixin, Base):
     )
 
     __table_args__ = (Index("ix_refunds_status", "status"),)
+
+
+class SupportTicket(TimestampMixin, Base):
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    subscription_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("subscriptions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    payment_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("payments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    category: Mapped[SupportTicketCategory] = mapped_column(
+        SqlEnum(SupportTicketCategory, name="support_ticket_category"),
+        nullable=False,
+        default=SupportTicketCategory.GENERAL,
+    )
+    status: Mapped[SupportTicketStatus] = mapped_column(
+        SqlEnum(SupportTicketStatus, name="support_ticket_status"),
+        nullable=False,
+        default=SupportTicketStatus.NEW,
+    )
+    assigned_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("admins.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    context_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user: Mapped[User] = relationship(
+        back_populates="support_tickets",
+        lazy="selectin",
+    )
+    subscription: Mapped[Subscription | None] = relationship(
+        back_populates="support_tickets",
+        lazy="selectin",
+    )
+    payment: Mapped[Payment | None] = relationship(
+        back_populates="support_tickets",
+        lazy="selectin",
+    )
+    assigned_admin: Mapped[Admin | None] = relationship(
+        back_populates="assigned_support_tickets",
+        lazy="selectin",
+    )
+    messages: Mapped[list[SupportMessage]] = relationship(
+        back_populates="ticket",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="SupportMessage.created_at",
+    )
+
+    __table_args__ = (
+        Index("ix_support_tickets_status", "status"),
+        Index("ix_support_tickets_user_status", "user_id", "status"),
+        Index("ix_support_tickets_assigned_admin_id", "assigned_admin_id"),
+    )
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("support_tickets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_type: Mapped[SupportSenderType] = mapped_column(
+        SqlEnum(SupportSenderType, name="support_sender_type"),
+        nullable=False,
+    )
+    sender_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    ticket: Mapped[SupportTicket] = relationship(
+        back_populates="messages",
+        lazy="selectin",
+    )
+
+    __table_args__ = (
+        Index("ix_support_messages_ticket_id", "ticket_id"),
+        Index("ix_support_messages_created_at", "created_at"),
+    )
 
 
 class NotificationLog(Base):

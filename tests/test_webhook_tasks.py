@@ -22,7 +22,7 @@ async def test_runs_job_when_lock_acquired(monkeypatch):
     ctx = _make_ctx_with_lock(acquired=True)
     await run_process_webhook_events(ctx, provider="yookassa", limit=50)
 
-    mocked.assert_awaited_once_with(provider="yookassa", limit=50)
+    mocked.assert_awaited_once_with(provider="yookassa", limit=50, bot=None)
 
 
 @pytest.mark.asyncio
@@ -43,4 +43,18 @@ async def test_runs_without_lock_if_task_queue_missing(monkeypatch):
 
     await run_process_webhook_events({}, provider="test", limit=100)
 
-    mocked.assert_awaited_once_with(provider="test", limit=100)
+    mocked.assert_awaited_once_with(provider="test", limit=100, bot=None)
+
+
+@pytest.mark.asyncio
+async def test_passes_real_bot_from_ctx(monkeypatch):
+    mocked = AsyncMock()
+    monkeypatch.setattr("tasks.webhook_tasks.process_webhook_events", mocked)
+
+    fake_bot = MagicMock()
+    ctx = _make_ctx_with_lock(acquired=True)
+    ctx["bot"] = fake_bot
+
+    await run_process_webhook_events(ctx, provider="yookassa", limit=50)
+
+    mocked.assert_awaited_once_with(provider="yookassa", limit=50, bot=fake_bot)

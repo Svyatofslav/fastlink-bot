@@ -1,4 +1,0 @@
-DROP INDEX IF EXISTS ix_refund_requests_status_created_at_desc;
-DROP INDEX IF EXISTS ix_payments_subscription_created_at_desc;
-DROP INDEX IF EXISTS ix_payments_user_created_at_desc;
-DROP INDEX IF EXISTS ix_subscriptions_status_expires_at;

@@ -54,6 +54,7 @@ class NotificationType(StrEnum):
     TRAFFIC_100 = "traffic_100"
     REFUND_PROCESSED = "refund_processed"
     PAYMENT_SUCCEEDED = "payment_succeeded"
+    DONATION_SUCCEEDED = "donation_succeeded"
 
 
 class NotificationDeliveryStatus(StrEnum):
@@ -81,6 +82,9 @@ class AdminActionType(StrEnum):
     APPROVE_REFUND = "approve_refund"
     REJECT_REFUND = "reject_refund"
     PROCESS_REFUND = "process_refund"
+    ASSIGN_SUPPORT_TICKET = "assign_support_ticket"
+    REPLY_SUPPORT_TICKET = "reply_support_ticket"
+    CLOSE_SUPPORT_TICKET = "close_support_ticket"
 
 
 class WebhookEventStatus(StrEnum):
@@ -99,3 +103,23 @@ class AdminEntityType(StrEnum):
     PAYMENT = "payment"
     REFUND_REQUEST = "refund_request"
     REFUND = "refund"
+    SUPPORT_TICKET = "support_ticket"
+
+
+class SupportTicketStatus(StrEnum):
+    NEW = "new"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class SupportTicketCategory(StrEnum):
+    GENERAL = "general"
+    REFUND = "refund"
+    TECHNICAL = "technical"
+    OTHER = "other"
+
+
+class SupportSenderType(StrEnum):
+    USER = "user"
+    ADMIN = "admin"

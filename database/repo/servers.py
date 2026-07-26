@@ -38,61 +38,29 @@ class ServerRepo(BaseRepo[Server]):
         return await self.update(server, is_active=active)
 
     async def get_server_secrets(self, server_id: int) -> ServerSecrets | None:
-        """
-        Вернуть расшифрованные API/metrics токены для сервера.
-
-        Если сервер не найден, вернуть None.
-        """
         server = await self.get_by_id(server_id)
         if server is None:
             return None
 
-        api_token_plain: str | None = None
         metrics_token_plain: str | None = None
-
-        if server.api_token:
-            api_token_plain = decrypt_secret(server.api_token, self._crypto_key)
-            if api_token_plain == "":
-                api_token_plain = None
-
         if server.metrics_token:
-            metrics_token_plain = decrypt_secret(
-                server.metrics_token,
-                self._crypto_key,
-            )
+            metrics_token_plain = decrypt_secret(server.metrics_token, self._crypto_key)
             if metrics_token_plain == "":
                 metrics_token_plain = None
 
-        return ServerSecrets(
-            server_id=server.id,
-            api_token=api_token_plain,
-            metrics_token=metrics_token_plain,
-        )
+        return ServerSecrets(server_id=server.id, metrics_token=metrics_token_plain)
 
     async def set_server_tokens(
-        self,
-        server_id: int,
-        api_token: str | None,
-        metrics_token: str | None,
+        self, server_id: int, metrics_token: str | None
     ) -> None:
-        """
-        Зашифровать и сохранить API/metrics токены для сервера.
-
-        None → очистить соответствующий токен (NULL в БД).
-        """
-        api_token_enc: str | None = None
         metrics_token_enc: str | None = None
-
-        if api_token is not None:
-            api_token_enc = encrypt_secret(api_token, self._crypto_key)
-
         if metrics_token is not None:
             metrics_token_enc = encrypt_secret(metrics_token, self._crypto_key)
 
         stmt = (
             update(Server)
             .where(Server.id == server_id)
-            .values(api_token=api_token_enc, metrics_token=metrics_token_enc)
+            .values(metrics_token=metrics_token_enc)
         )
         await self.session.execute(stmt)
         await self.session.flush()

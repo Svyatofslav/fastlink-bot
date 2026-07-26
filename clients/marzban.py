@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 import structlog
@@ -16,7 +16,6 @@ class MarzbanCredentials:
     Базовые учётные данные для доступа к Marzban API.
 
     По умолчанию используем admin-логин/пароль из Settings.
-    Для отдельных серверов можем подставлять отдельный API-токен.
     """
 
     api_base: str
@@ -36,13 +35,54 @@ class MarzbanAuthError(MarzbanClientError):
 class MarzbanRequestError(MarzbanClientError):
     """Ошибка сетевого запроса или некорректного ответа."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        # None для сетевых ошибок (httpx.RequestError), где статуса ответа
+        # просто нет. Заполнен для всех случаев, когда Marzban реально
+        # ответил HTTP-кодом (4xx/5xx) — используется вызывающим кодом
+        # для точечной обработки конкретных статусов (например, 409
+        # "user already exists" при создании подписки), без парсинга
+        # текста сообщения по подстрокам.
+        self.status_code = status_code
+
+
+@dataclass(frozen=True)
+class MarzbanUserCreatePayload:
+    """
+    DTO для создания пользователя в Marzban.
+
+    Привязан к Subscription.marzban_username и Server.inbound_tag.
+    """
+
+    username: str
+    inbound_tag: str
+    data_limit_bytes: int
+    expiry_timestamp: int  # UNIX timestamp в секундах
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class MarzbanUserInfo:
+    """
+    DTO для информации о пользователе в Marzban.
+
+    Используется в сервисах FastLink, чтобы не таскать сырые dict.
+    """
+
+    username: str
+    enabled: bool
+    data_limit_bytes: int
+    data_used_bytes: int
+    expiry_timestamp: int | None
+    config_links: list[str] = field(default_factory=list)
+
 
 class MarzbanClient:
     """
     Async-клиент для работы с Marzban API.
 
-    Использует httpx.AsyncClient, базовый URL и таймаут из Settings.
-    Не хранит токены сервера — их выдаёт ServerRepo.get_server_secrets.
+    Использует httpx.AsyncClient и admin-логин/пароль из Settings.
+    Конкретная нода определяется через inbound_tag/маршрутизацию на стороне Marzban.
     Реализует ограниченный retry для транзиентных ошибок.
     """
 
@@ -89,23 +129,17 @@ class MarzbanClient:
         *,
         json: dict | None = None,
         headers: dict | None = None,
-        server_api_token: str | None = None,
     ) -> httpx.Response:
         """
         Внутренний метод для выполнения HTTP-запроса к Marzban.
 
-        Добавляет базовую авторизацию и, при необходимости,
-        bearer-токен конкретного сервера.
+        Добавляет базовую авторизацию admin-учёткой.
         Реализует ограниченный retry для транзиентных ошибок (сетевые сбои, 5xx).
         """
         req_headers: dict[str, str] = headers.copy() if headers else {}
 
         # Базовая авторизация admin-учёткой
         auth = (self._creds.username, self._creds.password)
-
-        # Дополнительный Bearer-токен для конкретного сервера (если есть)
-        if server_api_token:
-            req_headers.setdefault("Authorization", f"Bearer {server_api_token}")
 
         last_error: Exception | None = None
 
@@ -144,7 +178,8 @@ class MarzbanClient:
             # 5xx считаем транзиентными — пробуем повторить
             if 500 <= resp.status_code:
                 err = MarzbanRequestError(
-                    f"Marzban server error: status={resp.status_code}, body={resp.text}"
+                    f"Marzban server error: status={resp.status_code}, body={resp.text}",
+                    status_code=resp.status_code,
                 )
                 last_error = err
                 self._logger.warning(
@@ -163,7 +198,8 @@ class MarzbanClient:
             # 4xx (кроме 401/403) — логическая ошибка, повторять бессмысленно
             if 400 <= resp.status_code < 500:
                 raise MarzbanRequestError(
-                    f"Marzban client error: status={resp.status_code}, body={resp.text}"
+                    f"Marzban client error: status={resp.status_code}, body={resp.text}",
+                    status_code=resp.status_code,
                 )
 
             # Успешный ответ
@@ -192,44 +228,11 @@ class MarzbanClient:
 
         return f"{prefix.rstrip('/')}{path}/{token}"
 
+    def get_primary_config_link(self, user_info: MarzbanUserInfo) -> str | None:
+        """Первая доступная конфиг-ссылка пользователя (для клиентов без поддержки subscription)."""
+        return user_info.config_links[0] if user_info.config_links else None
 
-@dataclass(frozen=True)
-class MarzbanUserCreatePayload:
-    """
-    DTO для создания пользователя в Marzban.
-
-    Привязан к Subscription.marzban_username и Server.inbound_tag.
-    """
-
-    username: str
-    inbound_tag: str
-    data_limit_bytes: int
-    expiry_timestamp: int  # UNIX timestamp в секундах
-    enabled: bool = True
-
-
-@dataclass(frozen=True)
-class MarzbanUserInfo:
-    """
-    DTO для информации о пользователе в Marzban.
-
-    Используется в сервисах FastLink, чтобы не таскать сырые dict.
-    """
-
-    username: str
-    enabled: bool
-    data_limit_bytes: int
-    data_used_bytes: int
-    expiry_timestamp: int | None
-
-
-class MarzbanClient(MarzbanClient):  # продолжаем существующий класс
-    async def create_user(
-        self,
-        payload: MarzbanUserCreatePayload,
-        *,
-        server_api_token: str | None = None,
-    ) -> MarzbanUserInfo:
+    async def create_user(self, payload: MarzbanUserCreatePayload) -> MarzbanUserInfo:
         """
         Создать пользователя в Marzban.
 
@@ -250,7 +253,6 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
             method="POST",
             path="/users",
             json=body,
-            server_api_token=server_api_token,
         )
         data = resp.json()
 
@@ -260,14 +262,10 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
             data_limit_bytes=data.get("data_limit_bytes", 0),
             data_used_bytes=data.get("data_used_bytes", 0),
             expiry_timestamp=data.get("expiry_timestamp"),
+            config_links=list(data.get("links", [])),
         )
 
-    async def get_user(
-        self,
-        username: str,
-        *,
-        server_api_token: str | None = None,
-    ) -> MarzbanUserInfo:
+    async def get_user(self, username: str) -> MarzbanUserInfo:
         """
         Получить информацию о пользователе из Marzban.
 
@@ -277,7 +275,6 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
         resp = await self._request(
             method="GET",
             path=f"/users/{username}",
-            server_api_token=server_api_token,
         )
         data = resp.json()
 
@@ -287,6 +284,7 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
             data_limit_bytes=data.get("data_limit_bytes", 0),
             data_used_bytes=data.get("data_used_bytes", 0),
             expiry_timestamp=data.get("expiry_timestamp"),
+            config_links=list(data.get("links", [])),
         )
 
     async def set_user_traffic(
@@ -294,7 +292,6 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
         username: str,
         *,
         data_used_bytes: int,
-        server_api_token: str | None = None,
     ) -> None:
         """
         Обновить использованный трафик пользователя в Marzban.
@@ -312,7 +309,6 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
             method="PATCH",
             path=f"/users/{username}/traffic",
             json=body,
-            server_api_token=server_api_token,
         )
 
     async def set_user_enabled(
@@ -320,7 +316,6 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
         username: str,
         *,
         enabled: bool,
-        server_api_token: str | None = None,
     ) -> None:
         """
         Включить/отключить пользователя в Marzban.
@@ -335,5 +330,4 @@ class MarzbanClient(MarzbanClient):  # продолжаем существующ
             method="PATCH",
             path=f"/users/{username}/status",
             json=body,
-            server_api_token=server_api_token,
         )

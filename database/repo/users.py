@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from aiogram.types import User as TelegramUser
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from database.models import User
 from database.repo.base import BaseRepo
@@ -19,17 +20,31 @@ class UserRepo(BaseRepo[User]):
         return result.scalar_one_or_none()
 
     async def get_or_create(self, tg_user: TelegramUser) -> tuple[User, bool]:
+        """
+        Идемпотентно по telegram_id: при гонке двух одновременных /start
+        от одного и того же пользователя ловим IntegrityError на unique
+        constraint users.telegram_id и возвращаем уже созданную запись
+        вместо падения наружу.
+        """
         user = await self.get_by_telegram_id(tg_user.id)
         if user is not None:
             return user, False
 
-        user = await self.create(
-            telegram_id=tg_user.id,
-            username=tg_user.username,
-            first_name=tg_user.first_name,
-            last_name=tg_user.last_name,
-            language_code=tg_user.language_code or "ru",
-        )
+        try:
+            async with self.session.begin_nested():
+                user = await self.create(
+                    telegram_id=tg_user.id,
+                    username=tg_user.username,
+                    first_name=tg_user.first_name,
+                    last_name=tg_user.last_name,
+                    language_code=tg_user.language_code or "ru",
+                )
+        except IntegrityError:
+            user = await self.get_by_telegram_id(tg_user.id)
+            if user is None:
+                raise
+            return user, False
+
         return user, True
 
     async def update_profile(self, user: User, tg_user: TelegramUser) -> User:
@@ -55,3 +70,9 @@ class UserRepo(BaseRepo[User]):
             select(User).where(User.is_active == True, User.is_banned == False)  # noqa: E712
         )
         return list(result.scalars().all())
+
+    # database/repo/users.py — добавить метод в класс UserRepo
+    async def set_last_active_message_id(
+        self, user: User, message_id: int | None
+    ) -> User:
+        return await self.update(user, last_active_message_id=message_id)
