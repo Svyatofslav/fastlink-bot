@@ -156,12 +156,16 @@ jobs:
           printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      - name: Prepare deploy commit short
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DEPLOY_COMMIT_SHORT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
       - name: Generate production env file locally
         shell: bash
         run: |
           set -euo pipefail
-          COMMIT_SHORT="$(git rev-parse --short HEAD)"
-          export DEPLOY_COMMIT_SHORT="$COMMIT_SHORT"
           envsubst < .env.production.template > .env.production.generated
           test -s .env.production.generated
           if grep -n '\${[A-Za-z_][A-Za-z0-9_]*}' .env.production.generated; then
