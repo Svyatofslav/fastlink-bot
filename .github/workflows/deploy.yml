@@ -160,13 +160,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          COMMIT_SHORT="$(git rev-parse --short HEAD)"
+          export DEPLOY_COMMIT_SHORT="$COMMIT_SHORT"
           envsubst < .env.production.template > .env.production.generated
           test -s .env.production.generated
           if grep -n '\${[A-Za-z_][A-Za-z0-9_]*}' .env.production.generated; then
             echo "ERROR: Unresolved placeholders found in generated env file"
             exit 1
           fi
-          grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL)=' .env.production.generated
+          grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL|DEPLOY_COMMIT_SHORT)=' .env.production.generated
 
       - name: Preflight SSH and remote state
         timeout-minutes: 3
