@@ -14,11 +14,9 @@ on:
         default: ""
         type: string
 
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - closed
 
 concurrency:
   group: production-deploy
@@ -29,7 +27,7 @@ jobs:
     name: Build and push deploy image
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -71,7 +69,7 @@ jobs:
     name: Deploy to production
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 25
@@ -110,9 +108,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if [[ "${{ github.event_name }}" == "push" ]]; then
             echo "dry_run=false" >> "$GITHUB_OUTPUT"
-            echo "source=pr-merge" >> "$GITHUB_OUTPUT"
+            echo "source=push-main" >> "$GITHUB_OUTPUT"
           else
             echo "dry_run=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
             echo "source=manual" >> "$GITHUB_OUTPUT"
