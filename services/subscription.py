@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
-from database.enums import DisabledReason, SubscriptionStatus, AdminActionType
-from database.models import Subscription, Tariff, User
+from database.enums import AdminActionType, DisabledReason, SubscriptionStatus
+from database.models import Subscription, Tariff, User  # noqa: TC001
 from database.repo.subscriptions import SubscriptionRepo
 from database.repo.tariffs import TariffRepo
 from database.repo.users import UserRepo
 from services.admin_actions import AdminActionLogService
 from services.marzban_subscription import SubscriptionMarzbanService
 from services.notifications import NotificationService
-
 
 TRAFFIC_THRESHOLD_80 = 80
 TRAFFIC_THRESHOLD_95 = 95
@@ -88,7 +87,7 @@ class SubscriptionService:
 
         data_limit_bytes = tariff.data_limit_bytes
 
-        subscription = await self._subscriptions.create(
+        return await self._subscriptions.create(
             user_id=user_id,
             server_id=server_id,
             tariff_id=tariff_id,
@@ -103,14 +102,11 @@ class SubscriptionService:
             disabled_reason=None,
         )
 
-        return subscription
-
     async def activate(self, *, subscription_id: int) -> Subscription:
         """
         Активировать подписку: создать пользователя в Marzban и выставить статус ACTIVE.
         """
-        subscription = await self._marzban.activate_subscription(subscription_id)
-        return subscription
+        return await self._marzban.activate_subscription(subscription_id)
 
     async def disable(
         self,
@@ -193,7 +189,7 @@ class SubscriptionService:
         if tariff is None:
             raise ValueError(f"Tariff {tariff_id} not found")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         base = (
             subscription.expires_at
             if subscription.expires_at and subscription.expires_at > now

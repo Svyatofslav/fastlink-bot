@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import structlog
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
-from database.enums import PaymentProvider, PaymentStatus
-from database.models import Payment
-from database.repo.payments import PaymentRepo
-from services.notifications import NotificationService
-from services.subscription import SubscriptionService
-from schemas.dto import NewSubscriptionParams
 from clients.yookassa import FakeYooKassaClient, YooKassaClient, YooKassaClientError
 from config import get_settings
-from domain.purchase_metadata import build_yookassa_flat_metadata
+from database.enums import PaymentProvider, PaymentStatus
+from database.models import Payment  # noqa: TC001
+from database.repo.payments import PaymentRepo
 from domain.donation_metadata import build_yookassa_donation_flat_metadata
+from domain.purchase_metadata import build_yookassa_flat_metadata
+from schemas.dto import NewSubscriptionParams  # noqa: TC001
+from services.notifications import NotificationService
+from services.subscription import SubscriptionService
 
 logger = structlog.get_logger(__name__)
 
@@ -140,13 +140,11 @@ class PaymentService:
             )
             raise
 
-        payment = await self._payments.update(
+        return await self._payments.update(
             payment,
             provider_payment_id=link.provider_payment_id,
             confirmation_url=link.confirmation_url,
         )
-
-        return payment
 
     async def attach_provider_payment_id(
         self,
@@ -162,11 +160,10 @@ class PaymentService:
         if payment is None:
             raise ValueError(f"Payment {payment_id} not found")
 
-        payment = await self._payments.update(
+        return await self._payments.update(
             payment,
             provider_payment_id=provider_payment_id,
         )
-        return payment
 
     async def process_successful_payment(
         self,
@@ -214,7 +211,7 @@ class PaymentService:
             )
             return payment
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payment = await self._payments.set_status(
             payment,
             status=PaymentStatus.SUCCEEDED,
@@ -288,17 +285,15 @@ class PaymentService:
             )
             return payment
 
-        payment = await self._payments.set_status(
+        # При необходимости можно отключить связанную подписку
+        # через SubscriptionService.disable(..., disabled_reason=DisabledReason.PAYMENT_CANCELED),
+        # когда будем дописывать сценарий.
+        return await self._payments.set_status(
             payment,
             status=PaymentStatus.CANCELED,
             metadata_snapshot=metadata_snapshot,
             refundable=False,
         )
-
-        # При необходимости можно отключить связанную подписку
-        # через SubscriptionService.disable(..., disabled_reason=DisabledReason.PAYMENT_CANCELED),
-        # когда будем дописывать сценарий.
-        return payment
 
     async def cancel_pending_payment(self, *, payment_id: int) -> Payment:
         """

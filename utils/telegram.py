@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from aiogram import Bot
+from contextlib import suppress
+
+from aiogram import Bot  # noqa: TC002
 from aiogram.exceptions import TelegramBadRequest
 
 
@@ -15,9 +17,9 @@ async def disable_previous_menu(bot: Bot, chat_id: int, message_id: int | None) 
     """
     if message_id is None:
         return
-    try:
+    with suppress(TelegramBadRequest):
         await bot.edit_message_reply_markup(
-            chat_id=chat_id, message_id=message_id, reply_markup=None
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None,
         )
-    except TelegramBadRequest:
-        pass

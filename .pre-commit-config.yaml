@@ -13,11 +13,63 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic==2.10.1
+          - pydantic-settings==2.10.1
+          - aiogram==3.30.0
+          - aiohttp==3.14.1
+          - sqlalchemy==2.0.41
+          - asyncpg==0.30.0
+          - alembic==1.16.2
+          - httpx==0.28.1
+          - redis==5.2.1
+          - apscheduler==3.10.4
+          - arq==0.26.3
+          - qrcode==8.2
+          - pillow==12.3.0
+          - structlog==25.4.0
+          - psycopg2-binary==2.9.9
+          - cryptography==48.0.1
+          - argon2-cffi==23.1.0
+          - types-qrcode==8.2.0.20250506
+          - types-redis==4.6.0.20241004
+          - types-psycopg2==2.9.21.20250809
+        args: [--config-file=pyproject.toml]
+        exclude: ^(alembic/|tests/)
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: "1.7.9"
+    hooks:
+      - id: bandit
+        args: ["-c", "bandit.yaml", "-r", "."]
+        pass_filenames: false
+
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.9.0
+    hooks:
+      - id: pip-audit
+        args: ["-r", "requirements.txt"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+        args: ["--staged", "--config", "gitleaks.toml", "-v", "--redact"]
+
+  - repo: https://github.com/jendrikseipp/vulture
+    rev: v2.14
+    hooks:
+      - id: vulture
+
   - repo: local
     hooks:
       - id: pytest
-        name: pytest
-        entry: .venv/bin/python -m pytest -q
+        name: pytest with coverage gate (min 70%)
+        entry: .venv/bin/python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=70
         language: system
         pass_filenames: false
         types: [python]

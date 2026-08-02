@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import PaymentProvider
 from database.models import User
 from domain.donation_metadata import build_donation_metadata
 from services.payment import PaymentService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_user(db_session: AsyncSession, telegram_id: int) -> User:

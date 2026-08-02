@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     webhook_secret: str = Field(alias="WEBHOOK_SECRET")
     healthcheck_path: str = Field(default="health", alias="HEALTHCHECK_PATH")
 
-    http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
+    http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")  # noqa: S104  # nosec B104 -- обязательный bind для контейнера
     http_port: int = Field(default=8080, alias="HTTP_PORT")
     use_webhook: bool = Field(default=False, alias="USE_WEBHOOK")
     skip_webhook_registration: bool = Field(
@@ -133,17 +133,17 @@ class Settings(BaseSettings):
 
     marzban_token_ttl_seconds: int = 23 * 60 * 60
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def webhook_url(self) -> str:
         return f"{self.webhook_base_url.rstrip('/')}{self.webhook_path}"
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
         return (
@@ -151,7 +151,7 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url_sync(self) -> str:
         return (
@@ -159,14 +159,14 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def healthcheck_url_path(self) -> str:
         if self.healthcheck_path.startswith("/"):
             return self.healthcheck_path
         return f"/{self.healthcheck_path}"
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def support_bot_deep_link_base(self) -> str:
         return f"https://t.me/{self.support_bot_username}"

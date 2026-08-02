@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from aiogram.fsm.state import State, StatesGroup
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
 
 
 class PurchaseStates(StatesGroup):
@@ -34,7 +39,7 @@ DATA_IS_EXTEND = "is_extend"
 DATA_EXTEND_SUBSCRIPTION_ID = "extend_subscription_id"
 
 
-async def clear_purchase_state(state) -> None:
+async def clear_purchase_state(state: FSMContext) -> None:
     """Полностью сбрасывает FSM-состояние покупки.
 
     Используется при отмене заказа, ошибке или успешном завершении цепочки,
@@ -43,7 +48,7 @@ async def clear_purchase_state(state) -> None:
     await state.clear()
 
 
-def build_extend_data(subscription_id: int) -> dict:
+def build_extend_data(subscription_id: int) -> dict[str, int | bool]:
     """Формирует начальные данные состояния для сценария продления.
 
     Используется при входе в extend-flow из карточки подписки:
@@ -56,7 +61,7 @@ def build_extend_data(subscription_id: int) -> dict:
     }
 
 
-def build_purchase_data() -> dict:
+def build_purchase_data() -> dict[str, int | bool | None]:
     return {
         DATA_IS_EXTEND: False,
         DATA_EXTEND_SUBSCRIPTION_ID: None,

@@ -119,7 +119,7 @@ class MarzbanClient:
         attempt: 0, 1, 2, ...
         """
         base_delay = self._backoff_base * (2**attempt)
-        jitter = random.uniform(0, self._backoff_base)
+        jitter = random.uniform(0, self._backoff_base)  # noqa: S311  # nosec B311 -- jitter для retry backoff, не криптография
         await asyncio.sleep(base_delay + jitter)
 
     async def _request(
@@ -153,7 +153,6 @@ class MarzbanClient:
                     auth=auth,
                 )
             except httpx.RequestError as exc:
-                # Сетевая ошибка — повторяем в пределах max_retries
                 err = MarzbanRequestError(f"Network error calling Marzban: {exc}")
                 last_error = err
                 self._logger.warning(
@@ -167,7 +166,7 @@ class MarzbanClient:
                 if attempt < self._max_retries:
                     await self._sleep_with_backoff(attempt)
                     continue
-                raise err
+                raise err from exc
 
             # Ошибки аутентификации/авторизации не ретраим
             if resp.status_code in (401, 403):
@@ -176,7 +175,7 @@ class MarzbanClient:
                 )
 
             # 5xx считаем транзиентными — пробуем повторить
-            if 500 <= resp.status_code:
+            if resp.status_code >= 500:
                 err = MarzbanRequestError(
                     f"Marzban server error: status={resp.status_code}, body={resp.text}",
                     status_code=resp.status_code,

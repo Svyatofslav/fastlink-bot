@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import DisabledReason, PaymentProvider, SubscriptionStatus
 from database.models import Server, Subscription, Tariff, User
@@ -12,6 +12,9 @@ from domain.purchase_metadata import build_purchase_metadata
 from scheduler.jobs import _handle_payment_succeeded
 from services.payment import PaymentService
 from states.purchase import DATA_EXTEND_SUBSCRIPTION_ID, DATA_IS_EXTEND
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_active_subscription(db_session: AsyncSession, *, days_left: int):
@@ -28,7 +31,7 @@ async def _make_active_subscription(db_session: AsyncSession, *, days_left: int)
     db_session.add_all([user, server, tariff])
     await db_session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     subscription = Subscription(
         user_id=user.id,
         server_id=server.id,
@@ -131,7 +134,7 @@ async def test_extension_payment_extends_expires_at_and_resets_traffic(
             "amount": {"value": "299.00", "currency": "RUB"},
             "paid": True,
             "description": f"FastLink payment #{payment.id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {
                 "tariff_id": str(tariff.id),
                 "server_id": str(server.id),
@@ -203,7 +206,7 @@ async def test_extension_reactivates_expired_disabled_subscription(
             "amount": {"value": "299.00", "currency": "RUB"},
             "paid": True,
             "description": f"FastLink payment #{payment.id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {
                 "tariff_id": str(tariff.id),
                 "server_id": str(server.id),
@@ -229,4 +232,4 @@ async def test_extension_reactivates_expired_disabled_subscription(
 
     assert updated.status is SubscriptionStatus.ACTIVE
     assert updated.disabled_reason is None
-    assert updated.expires_at > datetime.now(timezone.utc)
+    assert updated.expires_at > datetime.now(UTC)

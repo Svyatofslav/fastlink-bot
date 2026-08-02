@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 
 def format_price(amount_minor: int | None, currency: str = "RUB") -> str:
@@ -35,7 +38,7 @@ def parse_price(raw: str) -> int | None:
         return None
     if value <= 0:
         return None
-    minor = (value * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    minor = (value * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
     return int(minor)
 
 

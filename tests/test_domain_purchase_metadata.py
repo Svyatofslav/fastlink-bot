@@ -3,14 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from domain.purchase_metadata import (
-    build_subscription_dates,
-    build_purchase_metadata,
-    build_yookassa_flat_metadata,
     build_new_subscription_params_from_metadata,
+    build_purchase_metadata,
+    build_subscription_dates,
+    build_yookassa_flat_metadata,
 )
-from states.purchase import DATA_IS_EXTEND, DATA_EXTEND_SUBSCRIPTION_ID
-from tests.factories import make_user, make_server, make_tariff
-
+from states.purchase import DATA_EXTEND_SUBSCRIPTION_ID, DATA_IS_EXTEND
+from tests.factories import make_server, make_tariff, make_user
 
 # ---------------------------------------------------------------------------
 # build_subscription_dates

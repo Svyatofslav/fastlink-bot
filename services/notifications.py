@@ -4,7 +4,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from database.enums import NotificationDeliveryStatus, NotificationType
 from database.repo.notifications import NotificationRepo
@@ -18,7 +18,11 @@ class NotificationService:
         self._repo = NotificationRepo(session)
 
     async def was_sent(
-        self, *, user_id, notification_type, subscription_id=None
+        self,
+        *,
+        user_id: int,
+        notification_type: NotificationType,
+        subscription_id: int | None = None,
     ) -> bool:
         return await self._repo.was_sent(
             user_id=user_id,
@@ -27,7 +31,11 @@ class NotificationService:
         )
 
     async def should_send(
-        self, *, user_id, notification_type, subscription_id=None
+        self,
+        *,
+        user_id: int,
+        notification_type: NotificationType,
+        subscription_id: int | None = None,
     ) -> bool:
         already_sent = await self.was_sent(
             user_id=user_id,
@@ -37,7 +45,12 @@ class NotificationService:
         return not already_sent
 
     async def log_success(
-        self, *, user_id, notification_type, subscription_id=None, payload=None
+        self,
+        *,
+        user_id: int,
+        notification_type: NotificationType,
+        subscription_id: int | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> None:
         await self._repo.log(
             user_id=user_id,
@@ -48,7 +61,12 @@ class NotificationService:
         )
 
     async def log_failure(
-        self, *, user_id, notification_type, subscription_id=None, payload=None
+        self,
+        *,
+        user_id: int,
+        notification_type: NotificationType,
+        subscription_id: int | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> None:
         await self._repo.log(
             user_id=user_id,
@@ -105,7 +123,11 @@ class NotificationService:
         return True
 
     async def notify_sub_expires_3d(
-        self, *, user_id, subscription_id, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -115,7 +137,11 @@ class NotificationService:
         )
 
     async def notify_sub_expires_1d(
-        self, *, user_id, subscription_id, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -125,7 +151,11 @@ class NotificationService:
         )
 
     async def notify_payment_succeeded(
-        self, *, user_id, subscription_id=None, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -134,7 +164,12 @@ class NotificationService:
             payload=payload,
         )
 
-    async def notify_donation_succeeded(self, *, user_id, payload=None) -> bool:
+    async def notify_donation_succeeded(
+        self,
+        *,
+        user_id: int,
+        payload: dict[str, Any] | None = None,
+    ) -> bool:
         return await self._try_notify(
             user_id=user_id,
             notification_type=NotificationType.DONATION_SUCCEEDED,
@@ -142,7 +177,11 @@ class NotificationService:
         )
 
     async def notify_refund_processed(
-        self, *, user_id, subscription_id=None, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -152,7 +191,11 @@ class NotificationService:
         )
 
     async def notify_traffic_80(
-        self, *, user_id, subscription_id, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -162,7 +205,11 @@ class NotificationService:
         )
 
     async def notify_traffic_95(
-        self, *, user_id, subscription_id, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,
@@ -172,7 +219,11 @@ class NotificationService:
         )
 
     async def notify_traffic_100(
-        self, *, user_id, subscription_id, payload=None
+        self,
+        *,
+        user_id: int,
+        subscription_id: int,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         return await self._try_notify(
             user_id=user_id,

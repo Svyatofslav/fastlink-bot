@@ -6,17 +6,17 @@ import pytest
 
 from database.enums import SubscriptionStatus
 from keyboards.client import (
-    CB_SERVER_PREFIX,
-    CB_TARIFF_PREFIX,
-    CB_PAYMENT_CHECK,
     CB_PAYMENT_CANCEL,
-    CB_SUB_PREFIX,
-    CB_SUB_LINK,
-    CB_SUB_QR,
-    CB_SUB_EXTEND,
-    CB_SUB_HELP,
+    CB_PAYMENT_CHECK,
+    CB_SERVER_PREFIX,
     CB_SUB_CONFIG_LINK,
     CB_SUB_CONFIG_QR,
+    CB_SUB_EXTEND,
+    CB_SUB_HELP,
+    CB_SUB_LINK,
+    CB_SUB_PREFIX,
+    CB_SUB_QR,
+    CB_TARIFF_PREFIX,
     payment_kb,
     subscription_card_kb,
 )

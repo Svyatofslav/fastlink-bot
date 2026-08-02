@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from aiogram.types import User as TelegramUser
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from database.models import User
 from database.repo.base import BaseRepo
+
+if TYPE_CHECKING:
+    from aiogram.types import User as TelegramUser
 
 
 class UserRepo(BaseRepo[User]):
@@ -60,7 +63,7 @@ class UserRepo(BaseRepo[User]):
         return user
 
     async def set_last_active(self, user: User) -> None:
-        await self.update(user, last_active_at=datetime.now(timezone.utc))
+        await self.update(user, last_active_at=datetime.now(UTC))
 
     async def set_banned(self, user: User, *, banned: bool) -> User:
         return await self.update(user, is_banned=banned)

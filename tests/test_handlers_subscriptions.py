@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+import pytest
 
 from database.enums import SubscriptionStatus
 from database.repo.payments import PaymentRepo
@@ -12,11 +13,14 @@ from handlers.client.subscriptions import (
     on_subscription_extend,
     on_subscription_help,
 )
-from keyboards.client import CB_MENU_MY_SUBS, CB_SUB_PREFIX, CB_SUB_EXTEND, CB_SUB_HELP
+from keyboards.client import CB_MENU_MY_SUBS, CB_SUB_EXTEND, CB_SUB_HELP, CB_SUB_PREFIX
 from services.payment import PaymentService
-from states.purchase import PurchaseStates, DATA_SERVER_ID
-from tests.factories import make_user, make_server, make_tariff, make_subscription
+from states.purchase import DATA_SERVER_ID, PurchaseStates
+from tests.factories import make_server, make_subscription, make_tariff, make_user
 from tests.helpers import make_callback, make_fsm_context
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +40,7 @@ async def test_on_my_subscriptions_empty(db_session: AsyncSession) -> None:
     await on_my_subscriptions(callback, state, db_session, user)
 
     callback.message.edit_text.assert_awaited_once()
-    args, kwargs = callback.message.edit_text.call_args
+    args, _kwargs = callback.message.edit_text.call_args
     assert "subs.none_yet" not in args[0]  # текст уже переведён, не ключ
     callback.answer.assert_awaited_once_with()
 

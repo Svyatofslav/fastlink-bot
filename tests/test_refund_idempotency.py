@@ -1,28 +1,31 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import (
+    NotificationDeliveryStatus,
+    NotificationType,
     PaymentProvider,
     PaymentStatus,
     RefundRequestStatus,
     RefundStatus,
-    NotificationType,
-    NotificationDeliveryStatus,
 )
 from database.models import (
-    User,
-    Payment,
-    RefundRequest,
-    Refund,
     NotificationLog,
+    Payment,
+    Refund,
+    RefundRequest,
+    User,
 )
 from services.notifications import NotificationService
 from services.refund import RefundService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -62,7 +65,7 @@ async def test_process_refund_result_idempotent(db_session: AsyncSession) -> Non
         status=PaymentStatus.SUCCEEDED,
         idempotence_key="idem-refund-1",
         metadata_snapshot=None,
-        paid_at=datetime.now(timezone.utc),
+        paid_at=datetime.now(UTC),
         refundable=True,
         refunded_amount=0,
     )

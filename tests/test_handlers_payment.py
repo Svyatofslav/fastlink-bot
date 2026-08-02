@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import PaymentStatus
 from handlers.client.payment import on_payment_cancel, on_payment_check
@@ -9,6 +10,9 @@ from keyboards.client import CB_PAYMENT_CANCEL, CB_PAYMENT_CHECK
 from states.purchase import PurchaseStates, build_purchase_data
 from tests.factories import make_payment, make_user
 from tests.helpers import make_callback, make_fsm_context
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +31,7 @@ async def test_on_payment_check_not_found(db_session: AsyncSession) -> None:
     await on_payment_check(callback, db_session, user)
 
     callback.answer.assert_awaited_once()
-    args, kwargs = callback.answer.call_args
+    _args, kwargs = callback.answer.call_args
     assert kwargs.get("show_alert") is True
     callback.message.edit_text.assert_not_awaited()
 
@@ -47,7 +51,7 @@ async def test_on_payment_check_pending(db_session: AsyncSession) -> None:
     await on_payment_check(callback, db_session, user)
 
     callback.answer.assert_awaited_once()
-    args, kwargs = callback.answer.call_args
+    _args, kwargs = callback.answer.call_args
     assert kwargs.get("show_alert") is True
     callback.message.edit_text.assert_not_awaited()
 
@@ -138,7 +142,7 @@ async def test_on_payment_cancel_impossible_when_not_pending(
     await on_payment_cancel(callback, db_session, state, user)
 
     callback.answer.assert_awaited_once()
-    args, kwargs = callback.answer.call_args
+    _args, kwargs = callback.answer.call_args
     assert kwargs.get("show_alert") is True
     callback.message.edit_text.assert_not_awaited()
 
@@ -157,7 +161,7 @@ async def test_on_payment_cancel_not_found_shows_alert(
     await on_payment_cancel(callback, db_session, state, user)
 
     callback.answer.assert_awaited_once()
-    args, kwargs = callback.answer.call_args
+    _args, kwargs = callback.answer.call_args
     assert kwargs.get("show_alert") is True
     callback.message.edit_text.assert_not_awaited()
     assert await state.get_state() is None

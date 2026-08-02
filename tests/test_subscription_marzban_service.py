@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.marzban_subscription import SubscriptionMarzbanService
-from clients.marzban import MarzbanClient, MarzbanUserInfo, MarzbanRequestError
+from clients.marzban import MarzbanClient, MarzbanRequestError, MarzbanUserInfo
 from database.enums import SubscriptionStatus
-from database.repo.subscriptions import SubscriptionRepo
 from database.repo.servers import ServerRepo
+from database.repo.subscriptions import SubscriptionRepo
 from database.repo.tariffs import TariffRepo
 from database.repo.users import UserRepo
+from services.marzban_subscription import SubscriptionMarzbanService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -148,13 +151,15 @@ async def test_activate_subscription_network_error(
     service = SubscriptionMarzbanService(session=db_session)
 
     fake_client = AsyncMock(spec=MarzbanClient)
-    fake_client.create_user = AsyncMock(side_effect=Exception("network error"))
+    fake_client.create_user = AsyncMock(
+        side_effect=MarzbanRequestError("network error")
+    )
     fake_client.build_subscription_url = Mock(
         return_value="https://fastlinkproject.com/sub/test-user-2"
     )
     service._client = fake_client
 
-    with pytest.raises(Exception):
+    with pytest.raises(MarzbanRequestError):
         await service.activate_subscription(subscription.id)
 
 

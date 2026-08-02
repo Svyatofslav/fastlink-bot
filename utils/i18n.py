@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict
-
 # Базовый словарь переводов по ключам и языкам.
 # Можно расширять по мере необходимости.
-TRANSLATIONS: Dict[str, Dict[str, str]] = {
+TRANSLATIONS: dict[str, dict[str, str]] = {
     # Главное меню
     "main.menu.title": {
         "ru": "Главное меню FastLink. Выберите действие:",
@@ -408,7 +406,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 }
 
 
-def t(key: str, lang: str = "ru", **kwargs) -> str:
+def t(key: str, lang: str = "ru", **kwargs: object) -> str:
     """
     Простая функция перевода: t("key", lang, placeholder=value).
 
@@ -417,13 +415,13 @@ def t(key: str, lang: str = "ru", **kwargs) -> str:
     - Поддерживает format-плейсхолдеры: {price}, {server_label}, ...
     """
     variants = TRANSLATIONS.get(key)
-    if not variants:
+    if not variants:  # noqa: SIM108
         base = key
     else:
         base = variants.get(lang) or variants.get("ru") or key
     if kwargs:
         try:
             return base.format(**kwargs)
-        except Exception:
+        except (KeyError, IndexError, ValueError):
             return base
     return base

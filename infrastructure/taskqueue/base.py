@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator  # noqa: TC003
 from contextlib import asynccontextmanager
 from typing import Any
 
-from infrastructure.taskqueue.types import LockHandle
+from infrastructure.taskqueue.contracts import LockHandle  # noqa: TC001
 
 
 class TaskQueue(ABC):

@@ -94,7 +94,7 @@ class MetricsClient:
 
         last_error: str | None = None
 
-        for attempt in range(retries + 1):
+        for _attempt in range(retries + 1):
             try:
                 resp = await self._client.get(self._creds.url, headers=headers)
             except httpx.RequestError as exc:

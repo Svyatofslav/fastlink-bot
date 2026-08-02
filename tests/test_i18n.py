@@ -1,6 +1,6 @@
 import pytest
 
-from utils.i18n import t, TRANSLATIONS
+from utils.i18n import TRANSLATIONS, t
 
 
 def test_t_returns_ru_by_default() -> None:

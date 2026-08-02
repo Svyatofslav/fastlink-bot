@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
-from redis.asyncio import Redis
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from redis.asyncio import Redis
 
 
 class ThrottlingMiddleware(BaseMiddleware):
@@ -28,7 +32,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         # Throttle только message и callback, остальное пропускаем
-        if not isinstance(event, (Message, CallbackQuery)):
+        if not isinstance(event, Message | CallbackQuery):
             return await handler(event, data)
 
         user = data.get("user")

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database.enums import PaymentProvider
 from database.models import Payment, User
 from handlers.client.donation import on_donation_amount_entered
 from states.donation import DATA_DONATION_PAYMENT_IN_PROGRESS, DonationStates
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def kopecks_to_rub_str(kopecks: int) -> str:
@@ -59,7 +62,7 @@ async def _count_payments(db_session: AsyncSession, user_id: int) -> int:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "amount_str,should_succeed",
+    ("amount_str", "should_succeed"),
     [
         (kopecks_to_rub_str(settings.donation_min_amount), True),
         (kopecks_to_rub_str(settings.donation_min_amount - 1), False),

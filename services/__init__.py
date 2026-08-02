@@ -9,7 +9,7 @@ from services.support import SupportService
 __all__ = [
     "AdminAuthService",
     "AdminSessionStore",
-    "SubscriptionMarzbanService",
     "NodeHealthService",
+    "SubscriptionMarzbanService",
     "SupportService",
 ]

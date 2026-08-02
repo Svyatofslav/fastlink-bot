@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable  # noqa: TC003
+from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from aiogram.types import TelegramObject  # noqa: TC002
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: TC002
 
 
 class DbSessionMiddleware(BaseMiddleware):

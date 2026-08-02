@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from aiogram import Router
 from aiogram.filters import CommandStart
-from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import User
 from handlers.client.menu import render_main_menu
 from utils.i18n import t
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
+    from aiogram.types import Message
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from database.models import User
 
 router = Router(name="client-start")
 

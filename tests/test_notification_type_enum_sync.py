@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import NotificationType
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

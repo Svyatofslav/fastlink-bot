@@ -1,5 +1,9 @@
 from __future__ import annotations
-from database.models import User
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from database.models import User
 
 
 def build_donation_metadata(*, user: User, amount: int, currency: str = "RUB") -> dict:

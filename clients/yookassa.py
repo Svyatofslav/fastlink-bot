@@ -141,7 +141,8 @@ class FakeYooKassaClient(YooKassaClient):
     а не через прямой импорт в хендлерах.
     """
 
-    def __init__(self) -> None:  # noqa: super().__init__ не нужен, нет httpx.client
+    def __init__(self) -> None:
+        # super().__init__ не нужен, нет httpx.client
         pass
 
     async def aclose(self) -> None:
@@ -157,6 +158,8 @@ class FakeYooKassaClient(YooKassaClient):
         return_url: str,
         metadata: dict | None = None,
     ) -> YooKassaPaymentLink:
+        del amount, currency, description, idempotency_key, return_url, metadata
+
         fake_id = f"fake_{uuid.uuid4().hex[:12]}"
         return YooKassaPaymentLink(
             provider_payment_id=fake_id,

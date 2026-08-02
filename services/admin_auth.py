@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from database.models import Admin
-from database.repo.admins import AdminRepo
-from utils.password import hash_password, verify_password, needs_rehash
+from utils.password import hash_password, needs_rehash, verify_password
+
+if TYPE_CHECKING:
+    from database.models import Admin
+    from database.repo.admins import AdminRepo
 
 
 @dataclass(frozen=True)

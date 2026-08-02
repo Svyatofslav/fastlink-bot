@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 
 from database.enums import SupportTicketStatus
@@ -49,7 +51,11 @@ class SupportTicketRepo(BaseRepo[SupportTicket]):
         return list(result.scalars().all())
 
     async def set_status(
-        self, ticket: SupportTicket, *, status: SupportTicketStatus, **extra
+        self,
+        ticket: SupportTicket,
+        *,
+        status: SupportTicketStatus,
+        **extra: Any,
     ) -> SupportTicket:
         return await self.update(ticket, status=status, **extra)
 

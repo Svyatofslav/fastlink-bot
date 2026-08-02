@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import DisabledReason, SubscriptionStatus
 from database.models import Server, Subscription, Tariff, User
-from services.subscription import SubscriptionService
 from database.repo.admin_actions import AdminActionRepo
+from services.subscription import SubscriptionService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_disabled_subscription(
@@ -30,7 +33,7 @@ async def _make_disabled_subscription(
     db_session.add_all([user, server, tariff])
     await db_session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     subscription = Subscription(
         user_id=user.id,
         server_id=server.id,

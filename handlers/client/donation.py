@@ -1,27 +1,32 @@
 from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING, cast
+
 import structlog
-from aiogram import Router, F
-from aiogram.fsm.context import FSMContext
+from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database.enums import PaymentProvider
-from database.models import User
-from keyboards.client import (
-    CB_MENU_DONATE,
-    CB_DONATION_CANCEL,
-    payment_kb,
-    donation_amount_kb,
-)
-
-from services.payment import PaymentService
-from states.donation import DonationStates, DATA_DONATION_PAYMENT_IN_PROGRESS
 from domain.donation_metadata import build_donation_metadata
 from handlers.client.menu import render_main_menu
+from keyboards.client import (
+    CB_DONATION_CANCEL,
+    CB_MENU_DONATE,
+    donation_amount_kb,
+    payment_kb,
+)
+from services.payment import PaymentService
+from states.donation import DATA_DONATION_PAYMENT_IN_PROGRESS, DonationStates
 from utils.format import format_price, parse_price
 from utils.i18n import t
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from database.models import User
 
 router = Router(name="client-donation")
 logger = structlog.get_logger(__name__)
@@ -29,24 +34,41 @@ logger = structlog.get_logger(__name__)
 
 @router.callback_query(lambda c: c.data == CB_MENU_DONATE)
 async def on_donate_clicked(
-    callback: CallbackQuery, state: FSMContext, user: User
+    callback: CallbackQuery,
+    state: FSMContext,
+    user: User,
 ) -> None:
     lang = user.language_code or "ru"
+
+    message = callback.message
+    if message is None or not hasattr(message, "edit_text"):
+        await callback.answer()
+        return
+    message = cast("Message", message)
+
     await state.set_state(DonationStates.waiting_for_amount)
     min_price = format_price(settings.donation_min_amount)
     max_price = format_price(settings.donation_max_amount)
     text = t("donation.ask_amount", lang, min_price=min_price, max_price=max_price)
-    await callback.message.edit_text(text, reply_markup=donation_amount_kb(user))
+    await message.edit_text(text, reply_markup=donation_amount_kb(user))
     await callback.answer()
 
 
 @router.message(DonationStates.waiting_for_amount, F.text)
 async def on_donation_amount_entered(
-    message: Message, session: AsyncSession, state: FSMContext, user: User
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    user: User,
 ) -> None:
     lang = user.language_code or "ru"
-    amount = parse_price(message.text)
 
+    text = message.text
+    if text is None:
+        await message.answer(t("donation.invalid_amount", lang))
+        return
+
+    amount = parse_price(text)
     if amount is None:
         await message.answer(t("donation.invalid_amount", lang))
         return
@@ -80,7 +102,9 @@ async def on_donation_amount_entered(
 
     idempotency_key = str(uuid.uuid4())
     metadata_snapshot = build_donation_metadata(
-        user=user, amount=amount, currency="RUB"
+        user=user,
+        amount=amount,
+        currency="RUB",
     )
 
     payment_service = PaymentService(session)
@@ -96,8 +120,16 @@ async def on_donation_amount_entered(
         )
     except Exception:
         logger.exception(
-            "donation_create_payment_failed", user_id=user.id, amount=amount
+            "donation_create_payment_failed",
+            user_id=user.id,
+            amount=amount,
         )
+        await state.update_data({DATA_DONATION_PAYMENT_IN_PROGRESS: False})
+        await message.answer(t("purchase.create_failed", lang))
+        return
+
+    confirmation_url = payment.confirmation_url
+    if confirmation_url is None:
         await state.update_data({DATA_DONATION_PAYMENT_IN_PROGRESS: False})
         await message.answer(t("purchase.create_failed", lang))
         return
@@ -106,7 +138,8 @@ async def on_donation_amount_entered(
     price = format_price(payment.amount, payment.currency)
     text = t("donation.payment_created", lang, price=price)
     await message.answer(
-        text, reply_markup=payment_kb(payment.id, payment.confirmation_url, user)
+        text,
+        reply_markup=payment_kb(payment.id, confirmation_url, user),
     )
 
 
@@ -117,8 +150,14 @@ async def on_donation_cancel(
     user: User,
     session: AsyncSession,
 ) -> None:
-    await state.clear()
     lang = user.language_code or "ru"
-    await callback.message.edit_text(t("purchase.cancelled", lang), reply_markup=None)
-    await render_main_menu(callback.message, user, session)
+
+    message = callback.message
+    if message is None or not isinstance(message, Message):
+        await callback.answer()
+        return
+
+    await state.clear()
+    await message.edit_text(t("purchase.cancelled", lang), reply_markup=None)
+    await render_main_menu(message, user, session)
     await callback.answer()

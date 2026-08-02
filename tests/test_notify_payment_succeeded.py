@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scheduler.jobs import _notify_payment_succeeded
 from keyboards.client import main_menu_kb
+from scheduler.jobs import _notify_payment_succeeded
 from utils.format import format_price
 from utils.i18n import t
 

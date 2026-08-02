@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
+import database.repo.subscriptions as subscriptions_module
 from database.enums import SubscriptionStatus
 from database.models import Server, Subscription, Tariff, User
 from database.repo.subscriptions import SubscriptionRepo
-import database.repo.subscriptions as subscriptions_module
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class _FrozenDatetime(datetime):
@@ -67,7 +70,7 @@ async def test_get_expired_boundary_exactly_now_is_included(
     expires_at РОВНО равен now(), должна считаться просроченной и
     попадать в выборку (граница включительна).
     """
-    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)
+    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=UTC)
     _FrozenDatetime._frozen_now = frozen_now
     monkeypatch.setattr(subscriptions_module, "datetime", _FrozenDatetime)
 
@@ -108,7 +111,7 @@ async def test_get_expiring_boundary_exactly_now_is_excluded(
     подписка с expires_at РОВНО now должна считаться уже просроченной
     и НЕ попадать в окно "скоро истекающих".
     """
-    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)
+    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=UTC)
     _FrozenDatetime._frozen_now = frozen_now
     monkeypatch.setattr(subscriptions_module, "datetime", _FrozenDatetime)
 
@@ -149,7 +152,7 @@ async def test_get_expiring_boundary_exactly_at_window_edge_is_included(
     подписку, истекающую РОВНО в этот момент (граница включительна),
     и исключать подписку на 1 микросекунду позже.
     """
-    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)
+    frozen_now = datetime(2026, 7, 25, 12, 0, 0, tzinfo=UTC)
     _FrozenDatetime._frozen_now = frozen_now
     monkeypatch.setattr(subscriptions_module, "datetime", _FrozenDatetime)
 

@@ -1,6 +1,14 @@
 -r requirements.txt
-ruff==0.12.0
+ruff==0.15.17
 pre-commit==4.2.0
 pytest==8.4.1
 pytest-asyncio==1.4.0
+pytest-cov==6.0.0
 fakeredis==2.31.1
+mypy==1.14.1
+types-qrcode==8.2.0.20250506
+types-redis==4.6.0.20241004
+types-psycopg2==2.9.21.20250809
+bandit==1.7.9
+pip-audit==2.9.0
+vulture==2.14

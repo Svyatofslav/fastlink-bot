@@ -7,11 +7,10 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from database.engine import create_test_engine
-from database.enums import PaymentProvider
-from database.repo.refunds import RefundRepo
+from database.enums import PaymentProvider, RefundRequestStatus
 from database.repo.refund_requests import RefundRequestRepo
+from database.repo.refunds import RefundRepo
 from database.repo.users import UserRepo
-from database.enums import RefundRequestStatus
 from domain.donation_metadata import build_donation_metadata
 from services.payment import PaymentService
 from services.refund import RefundService

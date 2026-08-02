@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING, cast
 
 import structlog
 from aiogram import Router
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import PaymentProvider
-from database.models import User
 from database.repo.servers import ServerRepo
 from database.repo.tariffs import TariffRepo
+from domain.purchase_metadata import build_purchase_metadata
 from keyboards.client import (
     CB_CONFIRM_PAY,
     CB_MENU_BACK_TO_TARIFFS,
@@ -20,10 +18,10 @@ from keyboards.client import (
     CB_SERVER_PREFIX,
     CB_TARIFF_PREFIX,
     confirm_purchase_kb,
+    main_menu_kb,
     payment_kb,
     servers_kb,
     tariffs_kb,
-    main_menu_kb,
 )
 from services.payment import PaymentService
 from states.purchase import (
@@ -37,10 +35,34 @@ from states.purchase import (
 )
 from utils.format import format_price
 from utils.i18n import t
-from domain.purchase_metadata import build_purchase_metadata
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
+    from aiogram.types import CallbackQuery, Message
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from database.models import User
 
 router = Router(name="client-purchase")
 logger = structlog.get_logger(__name__)
+
+
+def _get_callback_message(callback: CallbackQuery) -> Message | None:
+    message = callback.message
+    if message is None:
+        return None
+    return cast("Message", message)
+
+
+def _extract_callback_id(data: str | None, prefix: str) -> int | None:
+    if data is None or not data.startswith(f"{prefix}:"):
+        return None
+
+    raw_id = data.rsplit(":", 1)[-1]
+    if not raw_id.isdigit():
+        return None
+
+    return int(raw_id)
 
 
 @router.callback_query(lambda c: c.data == CB_MENU_BUY)
@@ -50,6 +72,11 @@ async def on_buy_clicked(
     state: FSMContext,
     user: User,
 ) -> None:
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
     servers_repo = ServerRepo(session)
     tariffs_repo = TariffRepo(session)
 
@@ -69,7 +96,7 @@ async def on_buy_clicked(
     await state.set_state(PurchaseStates.selecting_server)
     await state.update_data(build_purchase_data())
 
-    await callback.message.edit_text(
+    await message.edit_text(
         t("purchase.choose_server", lang),
         reply_markup=servers_kb(servers, min_prices, user),
     )
@@ -83,11 +110,11 @@ async def _show_tariffs_for_server(
     user: User,
     server_id: int,
 ) -> None:
-    """
-    Общая логика показа тарифов для конкретного сервера.
-    Используется и при явном выборе сервера, и при возврате
-    из экрана подтверждения назад к тарифам — без мутации callback.data.
-    """
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
     servers_repo = ServerRepo(session)
     tariffs_repo = TariffRepo(session)
 
@@ -111,7 +138,7 @@ async def _show_tariffs_for_server(
 
     label = (server.emoji or server.name).strip()
     text = f"{label}\n{t('purchase.choose_tariff', lang)}"
-    await callback.message.edit_text(
+    await message.edit_text(
         text,
         reply_markup=tariffs_kb(tariffs, user, back_callback=CB_MENU_BUY),
     )
@@ -120,7 +147,7 @@ async def _show_tariffs_for_server(
 
 @router.callback_query(
     PurchaseStates.selecting_server,
-    lambda c: c.data.startswith(f"{CB_SERVER_PREFIX}"),
+    lambda c: c.data is not None and c.data.startswith(f"{CB_SERVER_PREFIX}:"),
 )
 async def on_server_selected(
     callback: CallbackQuery,
@@ -128,7 +155,12 @@ async def on_server_selected(
     state: FSMContext,
     user: User,
 ) -> None:
-    server_id = int(callback.data.split(":")[1])
+    lang = user.language_code or "ru"
+    server_id = _extract_callback_id(callback.data, CB_SERVER_PREFIX)
+    if server_id is None:
+        await callback.answer(t("purchase.server_unavailable", lang), show_alert=True)
+        return
+
     await _show_tariffs_for_server(callback, session, state, user, server_id)
 
 
@@ -147,7 +179,7 @@ async def on_back_to_servers(
 
 @router.callback_query(
     PurchaseStates.selecting_tariff,
-    lambda c: c.data.startswith(f"{CB_TARIFF_PREFIX}"),
+    lambda c: c.data is not None and c.data.startswith(f"{CB_TARIFF_PREFIX}:"),
 )
 async def on_tariff_selected(
     callback: CallbackQuery,
@@ -155,17 +187,25 @@ async def on_tariff_selected(
     state: FSMContext,
     user: User,
 ) -> None:
-    tariff_id = int(callback.data.split(":")[1])
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
+    lang = user.language_code or "ru"
+    tariff_id = _extract_callback_id(callback.data, CB_TARIFF_PREFIX)
     data = await state.get_data()
     server_id = data.get(DATA_SERVER_ID)
+
+    if tariff_id is None or not isinstance(server_id, int):
+        await callback.answer(t("purchase.tariff_unavailable", lang), show_alert=True)
+        return
 
     servers_repo = ServerRepo(session)
     tariffs_repo = TariffRepo(session)
 
-    lang = user.language_code or "ru"
-
     tariff = await tariffs_repo.get_by_id_active(tariff_id)
-    server = await servers_repo.get_by_id_active(server_id) if server_id else None
+    server = await servers_repo.get_by_id_active(server_id)
 
     if tariff is None or server is None:
         await callback.answer(t("purchase.tariff_unavailable", lang), show_alert=True)
@@ -190,7 +230,7 @@ async def on_tariff_selected(
         tariff_name=tariff.name,
         price=price,
     )
-    await callback.message.edit_text(text, reply_markup=confirm_purchase_kb(user))
+    await message.edit_text(text, reply_markup=confirm_purchase_kb(user))
     await callback.answer()
 
 
@@ -204,14 +244,19 @@ async def on_back_to_tariffs(
     state: FSMContext,
     user: User,
 ) -> None:
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
     data = await state.get_data()
     server_id = data.get(DATA_SERVER_ID)
     lang = user.language_code or "ru"
 
-    if server_id is None:
+    if not isinstance(server_id, int):
         await callback.answer(t("purchase.cannot_go_back", lang), show_alert=True)
         await clear_purchase_state(state)
-        await callback.message.edit_text(
+        await message.edit_text(
             t("main.menu.title", lang),
             reply_markup=main_menu_kb(user),
         )
@@ -226,11 +271,15 @@ async def on_cancel_purchase(
     state: FSMContext,
     user: User,
 ) -> None:
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
     lang = user.language_code or "ru"
     await clear_purchase_state(state)
-    from keyboards.client import main_menu_kb
 
-    await callback.message.edit_text(
+    await message.edit_text(
         t("purchase.cancelled", lang),
         reply_markup=main_menu_kb(user),
     )
@@ -247,6 +296,11 @@ async def on_confirm_pay(
     state: FSMContext,
     user: User,
 ) -> None:
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return
+
     data = await state.get_data()
     lang = user.language_code or "ru"
 
@@ -263,16 +317,34 @@ async def on_confirm_pay(
     tariff_id = data.get(DATA_TARIFF_ID)
     idempotency_key = data.get(DATA_IDEMPOTENCY_KEY)
 
+    if not isinstance(server_id, int) or not isinstance(tariff_id, int):
+        await callback.answer(t("purchase.data_expired", lang), show_alert=True)
+        await clear_purchase_state(state)
+        await message.edit_text(
+            t("main.menu.title", lang),
+            reply_markup=main_menu_kb(user),
+        )
+        return
+
+    if not isinstance(idempotency_key, str) or not idempotency_key:
+        await callback.answer(t("purchase.data_expired", lang), show_alert=True)
+        await clear_purchase_state(state)
+        await message.edit_text(
+            t("main.menu.title", lang),
+            reply_markup=main_menu_kb(user),
+        )
+        return
+
     servers_repo = ServerRepo(session)
     tariffs_repo = TariffRepo(session)
 
     server = await servers_repo.get_by_id_active(server_id)
     tariff = await tariffs_repo.get_by_id_active(tariff_id)
 
-    if server is None or tariff is None or idempotency_key is None:
+    if server is None or tariff is None:
         await callback.answer(t("purchase.data_expired", lang), show_alert=True)
         await clear_purchase_state(state)
-        await callback.message.edit_text(
+        await message.edit_text(
             t("main.menu.title", lang),
             reply_markup=main_menu_kb(user),
         )
@@ -311,12 +383,21 @@ async def on_confirm_pay(
         )
         return
 
+    confirmation_url = payment.confirmation_url
+    if confirmation_url is None:
+        await state.update_data({DATA_PAYMENT_IN_PROGRESS: False})
+        await callback.answer(
+            t("purchase.create_failed", lang),
+            show_alert=True,
+        )
+        return
+
     await state.set_state(PurchaseStates.awaiting_payment)
 
     price = format_price(payment.amount, payment.currency)
     text = t("purchase.payment_created", lang, price=price)
-    await callback.message.edit_text(
+    await message.edit_text(
         text,
-        reply_markup=payment_kb(payment.id, payment.confirmation_url, user),
+        reply_markup=payment_kb(payment.id, confirmation_url, user),
     )
     await callback.answer()

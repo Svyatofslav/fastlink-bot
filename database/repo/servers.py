@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from config import get_crypto_key
 from database.models import Server
@@ -45,7 +45,7 @@ class ServerRepo(BaseRepo[Server]):
         metrics_token_plain: str | None = None
         if server.metrics_token:
             metrics_token_plain = decrypt_secret(server.metrics_token, self._crypto_key)
-            if metrics_token_plain == "":
+            if not metrics_token_plain:
                 metrics_token_plain = None
 
         return ServerSecrets(server_id=server.id, metrics_token=metrics_token_plain)

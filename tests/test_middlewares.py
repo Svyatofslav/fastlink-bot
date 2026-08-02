@@ -13,7 +13,6 @@ from middlewares import (
     UserMiddleware,
 )
 
-
 # ---------------------------------------------------------------------------
 # DbSessionMiddleware
 # ---------------------------------------------------------------------------
@@ -49,7 +48,7 @@ async def test_db_session_middleware_rolls_back_on_exception():
     middleware = DbSessionMiddleware(session_factory=session_factory)
     handler = AsyncMock(side_effect=ValueError("boom"))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="boom"):
         await middleware(handler, MagicMock(spec=Message), {})
 
     fake_session.rollback.assert_awaited_once()
@@ -357,7 +356,7 @@ async def test_logging_middleware_reraises_exception_from_handler():
     handler = AsyncMock(side_effect=ValueError("boom"))
     event = MagicMock(spec=Message, from_user=MagicMock(id=1), text="hi", caption=None)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="boom"):
         await middleware(handler, event, {})
 
 

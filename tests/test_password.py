@@ -1,6 +1,6 @@
 from argon2 import PasswordHasher
 
-from utils.password import hash_password, verify_password, needs_rehash
+from utils.password import hash_password, needs_rehash, verify_password
 
 
 def test_argon2_roundtrip() -> None:
@@ -110,7 +110,7 @@ def test_verify_password_with_outdated_hash_still_works() -> None:
 def test_hash_password_empty_raises_value_error() -> None:
     import pytest
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must not be empty"):
         hash_password("")
 
 

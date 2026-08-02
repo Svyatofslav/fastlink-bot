@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from aiogram import Router
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from config import settings
-from database.models import User
 from keyboards.client import CB_MENU_HELP, back_to_main_kb, support_kb
 from utils.i18n import t
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
+
+    from database.models import User
 
 router = Router(name="client-support")
 
@@ -28,12 +33,17 @@ async def on_help(
     await state.clear()
     lang = user.language_code or "ru"
 
+    message = callback.message
+    if message is None or not isinstance(message, Message):
+        await callback.answer()
+        return
+
     if not settings.feature_support_enabled or not settings.support_bot_username:
         text = t("support.unavailable", lang)
-        await callback.message.edit_text(text, reply_markup=back_to_main_kb(user))
+        await message.edit_text(text, reply_markup=back_to_main_kb(user))
         await callback.answer()
         return
 
     text = t("support.intro_text", lang)
-    await callback.message.edit_text(text, reply_markup=support_kb(user))
+    await message.edit_text(text, reply_markup=support_kb(user))
     await callback.answer()

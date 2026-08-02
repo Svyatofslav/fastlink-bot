@@ -1,21 +1,24 @@
 # tests/test_subscription_jobs.py
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.enums import SubscriptionStatus, DisabledReason
-from database.models import User, Tariff, Server, Subscription
+from database.enums import DisabledReason, SubscriptionStatus
+from database.models import Server, Subscription, Tariff, User
 from database.repo.subscriptions import SubscriptionRepo
 from services.subscription import SubscriptionService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _utc_now() -> datetime:
     # БД и модели у тебя timezone-aware, так что лучше явно использовать UTC.
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @pytest.mark.asyncio

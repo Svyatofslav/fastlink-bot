@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from redis.asyncio import Redis
-from settings_schema import Settings
+from redis.asyncio import Redis  # noqa: TC002
+
+from settings_schema import Settings  # noqa: TC001
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ class AdminSessionStore:
             admin_id_str, telegram_id_str = value.decode("utf-8").split(":", 1)
             admin_id = int(admin_id_str)
             tg_id = int(telegram_id_str)
-        except Exception:
+        except (UnicodeDecodeError, ValueError):
             return None
 
         return AdminSession(admin_id=admin_id, telegram_id=tg_id)

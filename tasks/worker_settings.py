@@ -6,16 +6,18 @@ import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from arq import cron
-from arq.connections import RedisSettings
+from arq.connections import RedisSettings  # noqa: TC002
+from arq.cron import CronJob  # noqa: TC002
+from arq.typing import WorkerSettingsBase
 
 from config import get_deploy_commit_short, settings
 from infrastructure.taskqueue.arq_impl import ArqTaskQueue, build_redis_settings
-from tasks.webhook_tasks import run_process_webhook_events
 from tasks.subscription_tasks import (
     run_expire_overdue_subscriptions,
     run_send_expiration_reminders_1d,
     run_send_expiration_reminders_3d,
 )
+from tasks.webhook_tasks import run_process_webhook_events
 
 logger = structlog.get_logger(__name__)
 
@@ -42,15 +44,17 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     logger.info("arq_worker_shutdown")
 
 
-class WorkerSettings:
+class WorkerSettings(WorkerSettingsBase):
     redis_settings: RedisSettings = build_redis_settings()
-    functions = [
+
+    functions = [  # noqa: RUF012
         run_process_webhook_events,
         run_expire_overdue_subscriptions,
         run_send_expiration_reminders_3d,
         run_send_expiration_reminders_1d,
     ]
-    cron_jobs = [
+
+    cron_jobs: list[CronJob] = [  # noqa: RUF012
         cron(
             run_process_webhook_events,
             second=set(range(0, 60, 5)),

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from clients import get_marzban_client
-from clients.marzban import MarzbanClient, MarzbanUserCreatePayload, MarzbanRequestError
-from database.enums import SubscriptionStatus, DisabledReason
-from database.models import Subscription
+from clients.marzban import MarzbanClient, MarzbanRequestError, MarzbanUserCreatePayload
+from database.enums import DisabledReason, SubscriptionStatus
+from database.models import Subscription  # noqa: TC001
 from database.repo.subscriptions import SubscriptionRepo
 
 
@@ -30,7 +30,7 @@ class SubscriptionMarzbanService:
         if subscription is None:
             raise ValueError(f"Subscription {subscription_id} not found")
 
-        expires_at = subscription.expires_at or datetime.now(timezone.utc)
+        expires_at = subscription.expires_at or datetime.now(UTC)
         expiry_ts = int(expires_at.timestamp())
 
         payload = MarzbanUserCreatePayload(
@@ -58,13 +58,12 @@ class SubscriptionMarzbanService:
 
         subscription_url = self._client.build_subscription_url(marzban_user.username)
 
-        subscription = await self._subscriptions.set_status(
+        return await self._subscriptions.set_status(
             subscription,
             status=SubscriptionStatus.ACTIVE,
             subscription_url=subscription_url,
             disabled_reason=None,
         )
-        return subscription
 
     async def sync_traffic(
         self, subscription_id: int, *, data_used_bytes: int

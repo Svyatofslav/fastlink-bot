@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import (
-    NotificationType,
     NotificationDeliveryStatus,
+    NotificationType,
     SubscriptionStatus,
 )
-from database.models import User, Subscription, Server, Tariff
+from database.models import Server, Subscription, Tariff, User
 from database.repo.notifications import NotificationRepo
 from services.notifications import NotificationService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
