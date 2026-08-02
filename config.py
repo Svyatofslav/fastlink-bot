@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -22,8 +23,9 @@ def get_crypto_key() -> bytes:
 
 
 def get_deploy_commit_short() -> str:
-    """Читает короткий хэш последнего задеплоенного коммита из .deploy-commit-short.
-    Возвращает 'unknown' если файл не найден (локальная разработка, тесты)."""
+    value = os.getenv("DEPLOY_COMMIT_SHORT")
+    if value:
+        return value.strip()
     try:
         return Path(".deploy-commit-short").read_text().strip()
     except FileNotFoundError:

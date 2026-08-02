@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       - TZ=Europe/Moscow
+      - DEPLOY_COMMIT_SHORT=${DEPLOY_COMMIT_SHORT}
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,6 +32,7 @@ services:
       - .env
     environment:
       - TZ=Europe/Moscow
+      - DEPLOY_COMMIT_SHORT=${DEPLOY_COMMIT_SHORT}
     depends_on:
       postgres:
         condition: service_healthy
