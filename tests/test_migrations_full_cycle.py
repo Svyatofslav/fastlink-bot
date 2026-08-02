@@ -3,8 +3,8 @@ from __future__ import annotations
 import psycopg2
 import pytest
 from alembic.config import Config
-from alembic import command
 
+from alembic import command
 from config import get_settings
 
 

@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-import structlog
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from database.enums import (
-    RefundRequestStatus,
-    RefundStatus,
-    PaymentStatus,
-    DisabledReason,
     AdminActionType,
     AdminEntityType,
+    DisabledReason,
+    PaymentStatus,
+    RefundRequestStatus,
+    RefundStatus,
 )
-from database.models import RefundRequest, Refund
+from database.models import Refund, RefundRequest  # noqa: TC001
+from database.repo.payments import PaymentRepo
 from database.repo.refund_requests import RefundRequestRepo
 from database.repo.refunds import RefundRepo
-from database.repo.payments import PaymentRepo
 from services.admin_actions import AdminActionLogService
 from services.notifications import NotificationService
 from services.subscription import SubscriptionService
@@ -70,7 +70,7 @@ class RefundService:
         """
         Создать новую заявку на возврат от пользователя (RefundRequestStatus.NEW).
         """
-        refund_request = await self._refund_requests.create(
+        return await self._refund_requests.create(
             user_id=user_id,
             payment_id=payment_id,
             subscription_id=subscription_id,
@@ -80,7 +80,6 @@ class RefundService:
             reviewed_by_admin_id=None,
             reviewed_at=None,
         )
-        return refund_request
 
     async def set_request_status(
         self,
@@ -98,7 +97,7 @@ class RefundService:
         if refund_request is None:
             raise ValueError(f"RefundRequest {refund_request_id} not found")
 
-        now = datetime.now(timezone.utc) if admin_id is not None else None
+        now = datetime.now(UTC) if admin_id is not None else None
 
         refund_request = await self._refund_requests.set_status(
             refund_request,
@@ -216,19 +215,19 @@ class RefundService:
                 refund_request_id=refund_request_id,
                 provider_refund_id=provider_refund_id,
             )
-            existing = None
+            existing_refund: Refund | None = None
             if provider_refund_id is not None:
-                existing = await self._refunds.get_by_provider_refund_id(
+                existing_refund = await self._refunds.get_by_provider_refund_id(
                     provider_refund_id
                 )
-            if existing is None:
+            if existing_refund is None:
                 fallback_refunds = await self._refunds.get_by_refund_request(
                     refund_request_id
                 )
-                existing = fallback_refunds[0] if fallback_refunds else None
-            if existing is None:
+                existing_refund = fallback_refunds[0] if fallback_refunds else None
+            if existing_refund is None:
                 raise
-            return existing
+            return existing_refund
 
         await self._session.flush()
         return refund
@@ -291,7 +290,7 @@ class RefundService:
             )
             return refund
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         payment = refund.payment
         new_refunded_amount = payment.refunded_amount + refund.amount
@@ -305,13 +304,12 @@ class RefundService:
                 already_refunded=payment.refunded_amount,
                 incoming_refund_amount=refund.amount,
             )
-            refund = await self._refunds.set_status(
+            return await self._refunds.set_status(
                 refund,
                 status=RefundStatus.FAILED,
                 raw_payload=raw_payload,
                 completed_at=now,
             )
-            return refund
 
         refund = await self._refunds.set_status(
             refund,

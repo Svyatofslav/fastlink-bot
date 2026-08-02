@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
-import pytest
 import httpx
-import json
+import pytest
 
 from clients.marzban import (
+    MarzbanAuthError,
     MarzbanClient,
     MarzbanCredentials,
     MarzbanRequestError,
-    MarzbanAuthError,
 )
 
 
@@ -40,7 +40,7 @@ async def test_network_error_retries_then_fails(monkeypatch):
     # Счётчик вызовов request
     call_counter = {"count": 0}
 
-    async def fake_request(*args, **kwargs) -> httpx.Response:
+    def fake_request(*args, **kwargs) -> httpx.Response:
         call_counter["count"] += 1
         raise httpx.RequestError(
             "network down",
@@ -91,7 +91,7 @@ async def test_server_error_retries_then_fails(monkeypatch):
         httpx.Response(status_code=500, text="error-3"),
     ]
 
-    async def fake_request(*args, **kwargs) -> httpx.Response:
+    def fake_request(*args, **kwargs) -> httpx.Response:
         return responses.pop(0)
 
     monkeypatch.setattr(client._client, "request", AsyncMock(side_effect=fake_request))

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import structlog
 from aiohttp import web
 
-from database.session import get_async_session_factory
 from database.repo.webhook_events import WebhookEventsRepo
-
+from database.session import get_async_session_factory
 
 logger = structlog.get_logger(__name__)
 
@@ -15,12 +15,12 @@ logger = structlog.get_logger(__name__)
 async def test_webhook(request: web.Request) -> web.Response:
     try:
         payload: dict[str, Any] = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         logger.warning("test_webhook_invalid_json")
         return web.Response(status=400, text="invalid json")
 
     factory = get_async_session_factory()
-    async with factory() as session:  # type: AsyncSession
+    async with factory() as session:
         repo = WebhookEventsRepo(session=session)
         try:
             await repo.create_event(

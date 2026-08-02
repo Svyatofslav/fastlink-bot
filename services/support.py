@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import structlog
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from database.enums import SupportSenderType, SupportTicketCategory, SupportTicketStatus
-from database.models import SupportMessage, SupportTicket
+from database.models import SupportMessage, SupportTicket  # noqa: TC001
 from database.repo.support import SupportMessageRepo, SupportTicketRepo
 
 logger = structlog.get_logger(__name__)
@@ -125,7 +125,7 @@ class SupportService:
         return await self._tickets.update(
             ticket,
             status=SupportTicketStatus.CLOSED,
-            resolved_at=datetime.now(timezone.utc),
+            resolved_at=datetime.now(UTC),
         )
 
     async def get_open_ticket_for_user(self, user_id: int) -> SupportTicket | None:

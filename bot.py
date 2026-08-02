@@ -6,23 +6,23 @@ import sys
 from contextlib import suppress
 
 import structlog
-from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import Update
+from aiohttp import web
 from redis.asyncio import Redis
 
 from config import get_deploy_commit_short, settings
 from database.session import get_async_session_factory
+from handlers import router as root_router
 from middlewares import (
+    AdminSessionMiddleware,
     DbSessionMiddleware,
+    LoggingMiddleware,
     ThrottlingMiddleware,
     UserMiddleware,
-    LoggingMiddleware,
-    AdminSessionMiddleware,
 )
-from handlers import router as root_router
 from webhooks.test import test_webhook
 from webhooks.yookassa import yookassa_webhook
 
@@ -73,7 +73,7 @@ def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
     dp.callback_query.middleware(throttling_middleware)
 
 
-async def healthcheck(_: web.Request) -> web.Response:
+async def healthcheck(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
@@ -151,11 +151,11 @@ async def on_shutdown(app: web.Application) -> None:
             await bot.delete_webhook(drop_pending_updates=False)
 
     await bot.session.close()
-    await redis_fsm.aclose()
-    await redis_rate_limit.aclose()
+    await redis_fsm.aclose()  # type: ignore[attr-defined]
+    await redis_rate_limit.aclose()  # type: ignore[attr-defined]
 
 
-async def run_webhook_mode() -> None:
+async def run_webhook_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
     redis_fsm = Redis.from_url(settings.redis_url_fsm)
@@ -201,7 +201,7 @@ async def run_webhook_mode() -> None:
         await runner.cleanup()
 
 
-async def run_polling_mode() -> None:
+async def run_polling_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
     redis_fsm = Redis.from_url(settings.redis_url_fsm)
@@ -242,11 +242,11 @@ async def run_polling_mode() -> None:
     finally:
         await runner.cleanup()
         await bot.session.close()
-        await redis_fsm.aclose()
-        await redis_rate_limit.aclose()
+        await redis_fsm.aclose()  # type: ignore[attr-defined]
+        await redis_rate_limit.aclose()  # type: ignore[attr-defined]
 
 
-async def main() -> None:
+async def main() -> None:  # pragma: no cover
     configure_logging()
     logger = structlog.get_logger(__name__)
     logger.info(
@@ -263,5 +263,5 @@ async def main() -> None:
         await run_polling_mode()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(main())

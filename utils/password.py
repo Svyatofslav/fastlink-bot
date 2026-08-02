@@ -5,7 +5,6 @@ from typing import Final
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 
-
 # Параметры Argon2id можно позже усилить, если нужно.
 # Сейчас они подобраны как разумный баланс для админских паролей.
 _ARGON2_TIME_COST: Final[int] = 3

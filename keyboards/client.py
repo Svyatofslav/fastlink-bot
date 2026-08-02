@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import settings
-from database.models import Server, Subscription, Tariff, User
 from database.enums import SubscriptionStatus
 from utils.format import format_price
 from utils.i18n import t
+
+if TYPE_CHECKING:
+    from database.models import Server, Subscription, Tariff, User
 
 # ---------------------------------------------------------------------------
 # Callback data prefixes (single source of truth for this module)

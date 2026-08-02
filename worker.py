@@ -23,7 +23,7 @@ def configure_logging() -> None:
     )
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     configure_logging()
     logger = structlog.get_logger(__name__)
     logger.info(
@@ -38,5 +38,5 @@ def main() -> None:
     arq_run_worker(WorkerSettings)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

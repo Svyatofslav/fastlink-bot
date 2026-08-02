@@ -7,10 +7,12 @@ import uuid
 from pathlib import Path
 
 import psycopg2
-from psycopg2 import sql
+from alembic.config import Config as AlembicConfig
 from dotenv import load_dotenv
+from psycopg2 import sql
 
-from config import get_settings, get_crypto_key
+from alembic import command
+from config import get_crypto_key, get_settings
 
 # 1. Настроить sys.path
 ROOT = Path(__file__).resolve().parent
@@ -18,9 +20,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 # 2. Загрузить .env и .env.local ДО импортов тестовых модулей
-if os.path.exists(".env"):
+env_file = Path(".env")
+env_local_file = Path(".env.local")
+
+if env_file.exists():
     load_dotenv(".env", override=False)
-if os.path.exists(".env.local"):
+if env_local_file.exists():
     load_dotenv(".env.local", override=True)
 
 # 3. Сбросить кэш настроек, чтобы Settings() пересоздался с уже загруженными env
@@ -96,9 +101,6 @@ get_crypto_key.cache_clear()
 
 # 5. Прогоняем миграции Alembic на изолированной БД (аналогично тому,
 #    как это уже делает test_migrations_full_cycle.py для своей отдельной БД).
-from alembic import command  # noqa: E402
-from alembic.config import Config as AlembicConfig  # noqa: E402
-
 _alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
 _alembic_cfg.set_main_option("sqlalchemy.url", get_settings().database_url_sync)
 command.upgrade(_alembic_cfg, "head")

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import (
     NotificationDeliveryStatus,
@@ -18,6 +18,9 @@ from database.repo.payments import PaymentRepo
 from domain.donation_metadata import build_donation_metadata
 from scheduler.jobs import _handle_payment_succeeded
 from services.payment import PaymentService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_user(db_session: AsyncSession, telegram_id: int) -> User:
@@ -73,7 +76,7 @@ async def test_donation_webhook_persists_real_notification(
             "amount": {"value": "200.00", "currency": "RUB"},
             "paid": True,
             "description": f"FastLink payment #{payment.id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {"type": "donation", "user_id": str(user.id)},
         }
     }

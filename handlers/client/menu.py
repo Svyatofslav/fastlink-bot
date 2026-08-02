@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-from aiogram import Router
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
-from sqlalchemy.ext.asyncio import AsyncSession  # NEW
+from typing import TYPE_CHECKING
 
-from database.models import User
-from database.repo.users import UserRepo  # NEW
+from aiogram import Router
+from aiogram.types import CallbackQuery, Message
+
+from database.repo.users import UserRepo
 from keyboards.client import (
-    CB_MENU_MAIN,
     CB_MENU_LANGUAGE,
+    CB_MENU_MAIN,
     main_menu_kb,
-)  # CB_MENU_LANGUAGE NEW
+)
 from utils.i18n import t
 from utils.telegram import disable_previous_menu
+
+if TYPE_CHECKING:
+    from aiogram.fsm.context import FSMContext
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from database.models import User
 
 router = Router(name="client-menu")
 
@@ -34,12 +39,15 @@ async def render_main_menu(
     lang = user.language_code or "ru"
     text = t("main.menu.title", lang)
 
-    await disable_previous_menu(
-        message.bot, message.chat.id, user.last_active_message_id
-    )
+    bot = message.bot
+    if bot is not None:
+        await disable_previous_menu(
+            bot,
+            message.chat.id,
+            user.last_active_message_id,
+        )
 
     sent = await message.answer(text, reply_markup=main_menu_kb(user))
-
     await UserRepo(session).set_last_active_message_id(user, sent.message_id)
 
 
@@ -55,9 +63,15 @@ async def on_back_to_main(
     в главное меню.
     """
     await state.clear()
+
+    message = callback.message
+    if message is None or not isinstance(message, Message):
+        await callback.answer()
+        return
+
     lang = user.language_code or "ru"
     text = t("main.menu.title", lang)
-    await callback.message.edit_text(text, reply_markup=main_menu_kb(user))
+    await message.edit_text(text, reply_markup=main_menu_kb(user))
     await callback.answer()
 
 
@@ -74,14 +88,17 @@ async def on_change_language(
     """
     await state.clear()
 
+    message = callback.message
+    if message is None or not isinstance(message, Message):
+        await callback.answer()
+        return
+
     users_repo = UserRepo(session)
     current_lang = (user.language_code or "ru").lower()
     new_lang = "en" if current_lang == "ru" else "ru"
 
-    # Обновляем user в БД
     user = await users_repo.update(user, language_code=new_lang)
 
-    # Рендерим главное меню на новом языке
     text = t("main.menu.title", new_lang)
-    await callback.message.edit_text(text, reply_markup=main_menu_kb(user))
+    await message.edit_text(text, reply_markup=main_menu_kb(user))
     await callback.answer()

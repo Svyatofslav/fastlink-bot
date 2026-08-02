@@ -10,7 +10,7 @@ from arq.connections import RedisSettings
 
 from config import settings
 from infrastructure.taskqueue.base import TaskQueue
-from infrastructure.taskqueue.types import (
+from infrastructure.taskqueue.contracts import (
     LockHandle,
     TaskEnqueueError,
     TaskQueueConnectionError,
@@ -71,12 +71,10 @@ class ArqTaskQueue(TaskQueue):
         self._redis = redis
 
     @classmethod
-    async def create(
-        cls, redis_settings: RedisSettings | None = None
-    ) -> "ArqTaskQueue":
+    async def create(cls, redis_settings: RedisSettings | None = None) -> ArqTaskQueue:
         try:
             redis = await create_pool(redis_settings or build_redis_settings())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise TaskQueueConnectionError(
                 f"Failed to connect to Redis for ARQ: {exc}"
             ) from exc
@@ -98,7 +96,7 @@ class ArqTaskQueue(TaskQueue):
                 _defer_by=defer_by_seconds,
                 **kwargs,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise TaskEnqueueError(
                 f"Failed to enqueue task '{function_name}': {exc}"
             ) from exc

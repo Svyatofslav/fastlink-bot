@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 
@@ -30,7 +31,9 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         return list(result.scalars().all())
 
     async def get_by_marzban_username(
-        self, server_id: int, marzban_username: str
+        self,
+        server_id: int,
+        marzban_username: str,
     ) -> Subscription | None:
         result = await self.session.execute(
             select(Subscription).where(
@@ -41,13 +44,13 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         return result.scalar_one_or_none()
 
     async def get_expiring(self, within_days: int) -> list[Subscription]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.session.execute(
             select(Subscription).where(
                 Subscription.status == SubscriptionStatus.ACTIVE,
                 Subscription.expires_at
                 <= datetime.fromtimestamp(
-                    now.timestamp() + within_days * 86400, tz=timezone.utc
+                    now.timestamp() + within_days * 86400, tz=UTC
                 ),
                 Subscription.expires_at > now,
             )
@@ -55,7 +58,7 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         return list(result.scalars().all())
 
     async def get_expired(self) -> list[Subscription]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.session.execute(
             select(Subscription).where(
                 Subscription.status == SubscriptionStatus.ACTIVE,
@@ -76,7 +79,9 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         return list(result.scalars().all())
 
     async def update_traffic(
-        self, subscription: Subscription, data_used_bytes: int
+        self,
+        subscription: Subscription,
+        data_used_bytes: int,
     ) -> Subscription:
         return await self.update(subscription, data_used_bytes=data_used_bytes)
 
@@ -84,6 +89,6 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         self,
         subscription: Subscription,
         status: SubscriptionStatus,
-        **extra_fields,
+        **extra_fields: Any,
     ) -> Subscription:
         return await self.update(subscription, status=status, **extra_fields)

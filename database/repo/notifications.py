@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import select
 
-from database.enums import NotificationDeliveryStatus, NotificationType
 from database.models import NotificationLog
 from database.repo.base import BaseRepo
+
+if TYPE_CHECKING:
+    from database.enums import NotificationDeliveryStatus, NotificationType
 
 
 class NotificationRepo(BaseRepo[NotificationLog]):
@@ -34,7 +39,6 @@ class NotificationRepo(BaseRepo[NotificationLog]):
         subscription_id: int | None = None,
         payload: dict | None = None,
     ) -> NotificationLog:
-        from datetime import datetime, timezone
 
         return await self.create(
             user_id=user_id,
@@ -42,7 +46,7 @@ class NotificationRepo(BaseRepo[NotificationLog]):
             type=notification_type,
             delivery_status=delivery_status,
             payload=payload,
-            sent_at=datetime.now(timezone.utc),
+            sent_at=datetime.now(UTC),
         )
 
     async def get_by_user(self, user_id: int) -> list[NotificationLog]:

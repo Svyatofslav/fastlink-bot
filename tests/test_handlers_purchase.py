@@ -1,31 +1,35 @@
 from __future__ import annotations
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+import pytest
 
 from database.enums import PaymentStatus
 from database.repo.payments import PaymentRepo
 from handlers.client.purchase import (
-    on_buy_clicked,
-    on_server_selected,
     on_back_to_servers,
-    on_tariff_selected,
     on_back_to_tariffs,
+    on_buy_clicked,
     on_cancel_purchase,
     on_confirm_pay,
+    on_server_selected,
+    on_tariff_selected,
 )
 from keyboards.client import CB_MENU_BUY, CB_SERVER_PREFIX, CB_TARIFF_PREFIX
 from services.payment import PaymentService
 from states.purchase import (
-    PurchaseStates,
-    DATA_SERVER_ID,
-    DATA_TARIFF_ID,
     DATA_IDEMPOTENCY_KEY,
     DATA_PAYMENT_IN_PROGRESS,
+    DATA_SERVER_ID,
+    DATA_TARIFF_ID,
+    PurchaseStates,
 )
-from tests.factories import make_user, make_server, make_tariff
+from tests.factories import make_server, make_tariff, make_user
 from tests.helpers import make_callback, make_fsm_context
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +46,7 @@ async def test_on_buy_clicked_no_servers(db_session: AsyncSession) -> None:
     await on_buy_clicked(callback, db_session, state, user)
 
     callback.answer.assert_awaited_once()
-    args, kwargs = callback.answer.await_args
+    _args, kwargs = callback.answer.await_args
     assert kwargs.get("show_alert") is True
     callback.message.edit_text.assert_not_awaited()
     assert await state.get_state() is None

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-from database.models import Server, Tariff, User
-from states.purchase import DATA_IS_EXTEND, DATA_EXTEND_SUBSCRIPTION_ID
 from schemas.dto import NewSubscriptionParams
+from states.purchase import DATA_EXTEND_SUBSCRIPTION_ID, DATA_IS_EXTEND
+
+if TYPE_CHECKING:
+    from database.models import Server, Tariff, User
 
 
 def build_subscription_dates(*, duration_days: int) -> tuple[datetime | None, datetime]:
@@ -14,7 +17,7 @@ def build_subscription_dates(*, duration_days: int) -> tuple[datetime | None, da
     Позже, если логика изменится (например, starts_at при первой активации),
     мы поменяем только этот helper.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     starts_at = now
     expires_at = now + timedelta(days=duration_days)
     return starts_at, expires_at
@@ -70,7 +73,7 @@ def build_purchase_metadata(
         },
         "subscription": {
             "marzban_username": marzban_username,
-            "starts_at": starts_at.isoformat(),
+            "starts_at": starts_at.isoformat() if starts_at is not None else None,
             "expires_at": expires_at.isoformat(),
         },
         "flags": {

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import SubscriptionStatus
 from database.models import Server, Subscription, Tariff, User
 from database.repo.subscriptions import SubscriptionRepo
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_base(db_session: AsyncSession, suffix: str):
@@ -39,7 +42,7 @@ async def _make_sub(
     data_used_bytes,
     status=SubscriptionStatus.ACTIVE,
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sub = Subscription(
         user_id=user.id,
         server_id=server.id,

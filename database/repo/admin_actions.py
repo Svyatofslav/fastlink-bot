@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from database.enums import AdminActionType
 from database.models import AdminActionLog
 from database.repo.base import BaseRepo
+
+if TYPE_CHECKING:
+    from database.enums import AdminActionType
 
 
 class AdminActionRepo(BaseRepo[AdminActionLog]):
@@ -30,7 +33,7 @@ class AdminActionRepo(BaseRepo[AdminActionLog]):
             payload_before=payload_before,
             payload_after=payload_after,
             comment=comment,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
     async def get_by_admin(self, admin_id: int) -> list[AdminActionLog]:

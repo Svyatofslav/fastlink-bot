@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.repo import UserRepo
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class UserMiddleware(BaseMiddleware):
@@ -29,9 +33,7 @@ class UserMiddleware(BaseMiddleware):
     ) -> Any:
         # Безопасно достаём tg_user напрямую из event-объекта
         tg_user = None
-        if isinstance(event, Message):
-            tg_user = event.from_user
-        elif isinstance(event, CallbackQuery):
+        if isinstance(event, Message | CallbackQuery):
             tg_user = event.from_user
 
         if tg_user is None or tg_user.is_bot:

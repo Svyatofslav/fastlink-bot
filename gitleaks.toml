@@ -1,0 +1,30 @@
+title = "fastlink-bot gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for fastlink-bot"
+
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.production\.template$''',
+  '''project_dump_1\.txt$''',
+  '''tests/.*''',
+  '''conftest\.py$''',
+  '''\.git/.*''',
+  '''\.venv/.*''',
+  '''venv/.*''',
+  '''\.mypy_cache/.*''',
+  '''\.ruff_cache/.*''',
+  '''\.pytest_cache/.*''',
+]
+
+regexes = [
+  '''test_webhook_secret''',
+  '''test_metrics_token''',
+  '''test_password''',
+  '''testpassword''',
+  '''testredispassword''',
+  '''99f46a69a38efde2bdcaaf8cda4a1aa209dbf9d33f3c7c37298dfa6a01d88720''',
+]

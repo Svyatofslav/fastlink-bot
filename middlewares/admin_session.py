@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
-from redis.asyncio import Redis
 
 from services import AdminSessionStore
-from settings_schema import Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from redis.asyncio import Redis
+
+    from settings_schema import Settings
 
 
 class AdminSessionMiddleware(BaseMiddleware):
@@ -29,9 +34,7 @@ class AdminSessionMiddleware(BaseMiddleware):
     ) -> Any:
         tg_user_id: int | None = None
 
-        if isinstance(event, Message) and event.from_user:
-            tg_user_id = event.from_user.id
-        elif isinstance(event, CallbackQuery) and event.from_user:
+        if isinstance(event, Message | CallbackQuery) and event.from_user:
             tg_user_id = event.from_user.id
 
         if tg_user_id is None:

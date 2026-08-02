@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -14,7 +14,7 @@ from utils.format import (
 
 
 @pytest.mark.parametrize(
-    "amount_minor,currency,expected",
+    ("amount_minor", "currency", "expected"),
     [
         (19900, "RUB", "199 ₽"),
         (19950, "RUB", "199.50 ₽"),
@@ -30,7 +30,7 @@ def test_format_price(amount_minor: int | None, currency: str, expected: str) ->
 
 
 @pytest.mark.parametrize(
-    "raw,expected",
+    ("raw", "expected"),
     [
         ("50", 5000),
         ("49.99", 4999),
@@ -73,7 +73,7 @@ def test_parse_price_leading_trailing_whitespace() -> None:
 
 
 @pytest.mark.parametrize(
-    "used_bytes,limit_bytes,expected",
+    ("used_bytes", "limit_bytes", "expected"),
     [
         (1_500_000_000, 50_000_000_000, "1.4 GB из 46.6 GB"),
         (0, 50_000_000_000, "0.0 GB из 46.6 GB"),
@@ -90,7 +90,7 @@ def test_format_traffic(
 
 
 def test_format_date_with_value() -> None:
-    dt = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)
+    dt = datetime(2026, 7, 25, 12, 0, 0, tzinfo=UTC)
     assert format_date(dt) == "25.07.2026"
 
 
@@ -99,7 +99,7 @@ def test_format_date_none() -> None:
 
 
 @pytest.mark.parametrize(
-    "days,expected",
+    ("days", "expected"),
     [
         (30, "1 месяц"),
         (60, "2 месяца"),

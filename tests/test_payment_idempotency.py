@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import (
+    NotificationDeliveryStatus,
+    NotificationType,
     PaymentProvider,
     PaymentStatus,
-    NotificationType,
-    NotificationDeliveryStatus,
 )
-from database.models import User, NotificationLog
+from database.models import NotificationLog, User
 from services.notifications import NotificationService
 from services.payment import PaymentService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -73,7 +76,7 @@ async def test_process_successful_payment_idempotent(db_session: AsyncSession) -
     assert payment.provider_payment_id == "pay-1"
 
     # 3. Первый вызов process_successful_payment
-    paid_at_1 = datetime.now(timezone.utc)
+    paid_at_1 = datetime.now(UTC)
     payment_1 = await payment_service.process_successful_payment(
         provider_payment_id="pay-1",
         paid_at=paid_at_1,
@@ -97,7 +100,7 @@ async def test_process_successful_payment_idempotent(db_session: AsyncSession) -
     await db_session.commit()
 
     # 4. Второй вызов process_successful_payment с тем же provider_payment_id
-    paid_at_2 = datetime.now(timezone.utc)
+    paid_at_2 = datetime.now(UTC)
     payment_2 = await payment_service.process_successful_payment(
         provider_payment_id="pay-1",
         paid_at=paid_at_2,

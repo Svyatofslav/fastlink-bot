@@ -59,3 +59,13 @@ dump/
 
 # Deploy healthcheck marker
 .healthcheck-status
+
+# Tests
+coverage.xml
+
+# Deploy runtime markers
+.deploy-commit
+.deploy-commit-short
+.deploy-commit-previous
+.deploy-last-success
+.deploy-last-failure

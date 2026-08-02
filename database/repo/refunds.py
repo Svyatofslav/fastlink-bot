@@ -1,12 +1,14 @@
-# database/repo/refunds.py
-
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from database.enums import RefundStatus
 from database.models import Refund
 from database.repo.base import BaseRepo
+
+if TYPE_CHECKING:
+    from database.enums import RefundStatus
 
 
 class RefundRepo(BaseRepo[Refund]):
@@ -41,6 +43,6 @@ class RefundRepo(BaseRepo[Refund]):
         self,
         refund: Refund,
         status: RefundStatus,
-        **extra_fields,
+        **extra_fields: Any,
     ) -> Refund:
         return await self.update(refund, status=status, **extra_fields)

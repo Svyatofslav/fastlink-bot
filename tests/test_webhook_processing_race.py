@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from unittest.mock import AsyncMock, patch
 
 from database.engine import create_test_engine
 from database.enums import WebhookEventStatus

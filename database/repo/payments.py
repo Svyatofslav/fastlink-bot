@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from sqlalchemy import select
 
-from database.enums import PaymentStatus
 from database.models import Payment
 from database.repo.base import BaseRepo
+
+if TYPE_CHECKING:
+    from database.enums import PaymentStatus
 
 
 class PaymentRepo(BaseRepo[Payment]):
@@ -44,6 +48,6 @@ class PaymentRepo(BaseRepo[Payment]):
         self,
         payment: Payment,
         status: PaymentStatus,
-        **extra_fields,
+        **extra_fields: Any,
     ) -> Payment:
         return await self.update(payment, status=status, **extra_fields)

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from infrastructure.taskqueue.arq_impl import ArqTaskQueue
 from scheduler.jobs import (
     expire_overdue_subscriptions,
     send_expiration_reminders_1d,
     send_expiration_reminders_3d,
 )
+
+if TYPE_CHECKING:
+    from infrastructure.taskqueue.arq_impl import ArqTaskQueue
 
 logger = structlog.get_logger(__name__)
 

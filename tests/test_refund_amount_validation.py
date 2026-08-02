@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.enums import (
     PaymentProvider,
@@ -14,6 +14,9 @@ from database.enums import (
 from database.models import Payment, Refund, RefundRequest, User
 from database.repo.refunds import RefundRepo
 from services.refund import RefundAmountExceedsPaymentError, RefundService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_user(db_session: AsyncSession, telegram_id: int) -> User:
@@ -52,7 +55,7 @@ async def _make_payment(
         status=status,
         idempotence_key=idempotence_key,
         metadata_snapshot={"type": "test"},
-        paid_at=datetime.now(timezone.utc),
+        paid_at=datetime.now(UTC),
         refundable=True,
         refunded_amount=refunded_amount,
     )
@@ -169,14 +172,14 @@ async def test_refund_amount_zero_or_negative_rejected(
 
     refund_service = RefundService(db_session)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must be positive, got 0"):
         await refund_service.create_refund_for_request(
             refund_request_id=refund_request.id,
             amount=0,
             currency="RUB",
         )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must be positive, got -100"):
         await refund_service.create_refund_for_request(
             refund_request_id=refund_request.id,
             amount=-100,

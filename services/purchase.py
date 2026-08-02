@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-from database.models import Server, Tariff, User
 from schemas.dto import NewSubscriptionParams
+
+if TYPE_CHECKING:
+    from database.models import Server, Tariff, User
 
 
 def generate_marzban_username(telegram_id: int) -> str:
@@ -37,7 +40,7 @@ def build_purchase_metadata(
     - юнит-тестировать генерацию marzban_username и расчёт expires_at изолированно;
     - не размазывать бизнес-логику подготовки данных по хендлеру aiogram.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     expires_at = now + timedelta(days=tariff.duration_days)
     marzban_username = generate_marzban_username(user.telegram_id)
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from clients import get_metrics_client
-from clients.metrics import MetricsClient, NodeMetrics
+from clients.metrics import MetricsClient, NodeMetrics  # noqa: TC001
 from config import get_settings
 from database.repo.servers import ServerRepo
 

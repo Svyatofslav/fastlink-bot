@@ -7,10 +7,9 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from database.engine import create_test_engine
-from database.enums import NotificationType
+from database.enums import NotificationType, SubscriptionStatus
 from database.models import Server, Subscription, Tariff, User
 from database.repo.notifications import NotificationRepo
-from database.enums import SubscriptionStatus
 from services.notifications import NotificationService
 
 

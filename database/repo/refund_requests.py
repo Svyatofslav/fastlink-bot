@@ -1,6 +1,6 @@
-# database/repo/refund_requests.py
-
 from __future__ import annotations
+
+from typing import Any
 
 from sqlalchemy import select
 
@@ -40,6 +40,6 @@ class RefundRequestRepo(BaseRepo[RefundRequest]):
         self,
         refund_request: RefundRequest,
         status: RefundRequestStatus,
-        **extra_fields,
+        **extra_fields: Any,
     ) -> RefundRequest:
         return await self.update(refund_request, status=status, **extra_fields)

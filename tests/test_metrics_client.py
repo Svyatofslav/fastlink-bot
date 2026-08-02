@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
-import pytest
 import httpx
-import json
+import pytest
 
 from clients.metrics import MetricsClient, NodeMetrics
 
@@ -22,7 +22,7 @@ async def test_metrics_degraded_on_network_error(monkeypatch):
     """
     client = _make_metrics_client()
 
-    async def fake_get(*args, **kwargs) -> httpx.Response:
+    def fake_get(*args, **kwargs) -> httpx.Response:
         raise httpx.RequestError(
             "network down", request=httpx.Request("GET", "http://example.com/metrics")
         )
@@ -49,7 +49,7 @@ async def test_metrics_degraded_on_server_error(monkeypatch):
         httpx.Response(status_code=500, text="error-3"),
     ]
 
-    async def fake_get(*args, **kwargs) -> httpx.Response:
+    def fake_get(*args, **kwargs) -> httpx.Response:
         return responses.pop(0)
 
     monkeypatch.setattr(client._client, "get", AsyncMock(side_effect=fake_get))

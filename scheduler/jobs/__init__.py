@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
-from database.enums import DisabledReason, RefundStatus, NotificationType
-from database.models import Payment
+from database.enums import DisabledReason, NotificationType, RefundStatus
+from database.models import Payment  # noqa: TC001
 from database.repo import WebhookEventsRepo
+from database.repo.subscriptions import SubscriptionRepo
 from database.session import get_async_session_factory
+from keyboards.client import main_menu_kb
+from services.marzban_subscription import SubscriptionMarzbanService
+from services.notifications import NotificationService
 from services.payment import NewSubscriptionParams, PaymentService
 from services.refund import RefundService
 from services.subscription import SubscriptionService
-from services.notifications import NotificationService
-from database.repo.subscriptions import SubscriptionRepo
-from services.marzban_subscription import SubscriptionMarzbanService
 from utils.format import format_price
 from utils.i18n import t
-from keyboards.client import main_menu_kb
 
 if TYPE_CHECKING:
     from aiogram import Bot
@@ -33,7 +33,7 @@ _REFUND_EVENT_STATUS_MAP: dict[str, RefundStatus] = {
 
 
 async def process_webhook_events(
-    provider: str = "test", limit: int = 100, bot: "Bot | None" = None
+    provider: str = "test", limit: int = 100, bot: Bot | None = None
 ) -> None:
     factory = get_async_session_factory()
     async with factory() as session:
@@ -46,7 +46,7 @@ async def process_webhook_events(
 
 
 async def handle_single_event(
-    repo: WebhookEventsRepo, event: Any, bot: "Bot | None" = None
+    repo: WebhookEventsRepo, event: Any, bot: Bot | None = None
 ) -> None:
     """
     Разбирает одно webhook-событие и вызывает соответствующий сервис.
@@ -130,7 +130,7 @@ def _parse_datetime(raw: str | None) -> datetime | None:
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        return datetime.fromisoformat(str(raw))
     except (ValueError, AttributeError):
         return None
 
@@ -145,13 +145,13 @@ def _build_new_subscription_params(
 
 
 async def _handle_payment_succeeded(
-    session: AsyncSession, event: Any, payload: dict[str, Any], bot: "Bot | None" = None
+    session: AsyncSession, event: Any, payload: dict[str, Any], bot: Bot | None = None
 ) -> None:
     obj = _get_object(payload)
     provider_payment_id = _get_provider_payment_id(obj)
     metadata = _get_metadata(obj)
     metadata_snapshot = _build_metadata_snapshot(obj)
-    paid_at = _parse_datetime(obj.get("created_at")) or datetime.now(timezone.utc)
+    paid_at = _parse_datetime(obj.get("created_at")) or datetime.now(UTC)
 
     subscription_id_raw = metadata.get("subscription_id")
     subscription_id = int(subscription_id_raw) if subscription_id_raw else None
@@ -212,7 +212,7 @@ async def _handle_payment_succeeded(
 
 
 async def _notify_payment_succeeded(
-    bot: "Bot | None", session: AsyncSession, payment: Payment
+    bot: Bot | None, session: AsyncSession, payment: Payment
 ) -> None:
     """
     Отправляет push пользователю после успешной оплаты/активации подписки,
@@ -273,7 +273,7 @@ async def _notify_payment_succeeded(
             text=t("main.menu.title", lang),
             reply_markup=main_menu_kb(user),
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — фоновая job не должна падать из-за сбоя доставки уведомления
         logger.warning(
             "payment_succeeded_menu_send_failed",
             payment_id=payment.id,
@@ -289,7 +289,7 @@ async def _notify_payment_succeeded(
 
 
 async def notify_donation_succeeded(
-    bot: "Bot" | None, session: AsyncSession, payment: Payment
+    bot: Bot | None, session: AsyncSession, payment: Payment
 ) -> None:
     """Отправляет пользователю уведомление об успешном донате.
     Дедуплицируется через NotificationLog по NotificationType.DONATION_SUCCEEDED,
@@ -507,7 +507,7 @@ async def process_webhook_events_with_session(
     session: AsyncSession,
     provider: str = "test",
     limit: int = 100,
-    bot: "Bot | None" = None,
+    bot: Bot | None = None,
 ) -> None:
     repo = WebhookEventsRepo(session=session)
     try:

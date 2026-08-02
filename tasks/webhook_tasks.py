@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from infrastructure.taskqueue.arq_impl import ArqTaskQueue
 from scheduler.jobs import process_webhook_events
+
+if TYPE_CHECKING:
+    from infrastructure.taskqueue.arq_impl import ArqTaskQueue
 
 logger = structlog.get_logger(__name__)
 

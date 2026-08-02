@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable  # noqa: TC003
+from typing import Any
 
 import structlog
 from aiogram import BaseMiddleware

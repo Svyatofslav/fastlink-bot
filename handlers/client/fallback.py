@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from aiogram import Router
-from aiogram.types import Message
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
 
-from database.models import User
+from aiogram import Router
+
 from handlers.client.menu import render_main_menu
 from utils.i18n import t
+
+if TYPE_CHECKING:
+    from aiogram.types import Message
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from database.models import User
 
 router = Router(name="client-fallback")
 

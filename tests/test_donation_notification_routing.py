@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,7 +9,6 @@ from database.enums import PaymentProvider, PaymentStatus
 from database.repo.payments import PaymentRepo
 from database.repo.users import UserRepo
 from scheduler.jobs import _handle_payment_succeeded
-
 
 REALISTIC_DONATION_METADATA_SNAPSHOT = {
     "amount_value": "100.00",
@@ -58,7 +57,7 @@ async def test_donation_webhook_routes_to_donation_notify(db_session):
             "amount": {"value": "100.00", "currency": "RUB"},
             "paid": True,
             "description": f"FastLink payment #{payment.id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {"type": "donation", "user_id": str(user.id)},
         }
     }
@@ -120,7 +119,7 @@ async def test_regular_payment_webhook_routes_to_payment_notify(db_session):
             "amount": {"value": "299.00", "currency": "RUB"},
             "paid": True,
             "description": f"FastLink payment #{payment.id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "metadata": {
                 "tariff_id": "1",
                 "server_id": "1",

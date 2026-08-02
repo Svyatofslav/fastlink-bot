@@ -1,8 +1,6 @@
 services:
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${FASTLINK_IMAGE}
     container_name: fastlink-bot
     command: ["python", "bot.py"]
     restart: always
@@ -25,9 +23,7 @@ services:
       - ./logs:/app/logs
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${FASTLINK_IMAGE}
     container_name: fastlink-worker
     command: ["python", "worker.py"]
     restart: always

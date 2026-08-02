@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+import pytest
 
 from config import settings
 from database.enums import PaymentStatus
@@ -10,9 +11,12 @@ from database.repo.payments import PaymentRepo
 from handlers.client.donation import on_donate_clicked, on_donation_amount_entered
 from keyboards.client import CB_MENU_DONATE
 from services.payment import PaymentService
-from states.donation import DonationStates, DATA_DONATION_PAYMENT_IN_PROGRESS
+from states.donation import DATA_DONATION_PAYMENT_IN_PROGRESS, DonationStates
 from tests.factories import make_user
-from tests.helpers import make_callback, make_message, make_fsm_context
+from tests.helpers import make_callback, make_fsm_context, make_message
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # ---------------------------------------------------------------------------

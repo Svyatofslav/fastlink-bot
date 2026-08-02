@@ -1,0 +1,8 @@
+exclude_dirs:
+  - tests
+  - .venv
+  - venv
+  - alembic
+
+skips:
+  - B101
