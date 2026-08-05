@@ -67,5 +67,8 @@ coverage.xml
 .deploy-commit
 .deploy-commit-short
 .deploy-commit-previous
+.deploy-commit-short-previous
 .deploy-last-success
 .deploy-last-failure
+.deploy-state
+.deploy-state-previous
