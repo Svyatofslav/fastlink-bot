@@ -119,7 +119,8 @@ class MarzbanClient:
         attempt: 0, 1, 2, ...
         """
         base_delay = self._backoff_base * (2**attempt)
-        jitter = random.uniform(0, self._backoff_base)  # noqa: S311  # nosec B311 -- jitter для retry backoff, не криптография
+        # jitter для retry backoff, не криптография — random здесь допустим
+        jitter = random.uniform(0, self._backoff_base)  # noqa: S311  # nosec B311
         await asyncio.sleep(base_delay + jitter)
 
     async def _request(

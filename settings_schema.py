@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     webhook_secret: str = Field(alias="WEBHOOK_SECRET")
     healthcheck_path: str = Field(default="health", alias="HEALTHCHECK_PATH")
 
-    http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")  # noqa: S104  # nosec B104 -- обязательный bind для контейнера
+    # Bind на все интерфейсы обязателен для работы внутри Docker-сети
+    _HTTP_HOST_DEFAULT = "0.0.0.0"  # noqa: S104 # nosec B104
+
+    http_host: str = Field(default=_HTTP_HOST_DEFAULT, alias="HTTP_HOST")
     http_port: int = Field(default=8080, alias="HTTP_PORT")
     use_webhook: bool = Field(default=False, alias="USE_WEBHOOK")
     skip_webhook_registration: bool = Field(
