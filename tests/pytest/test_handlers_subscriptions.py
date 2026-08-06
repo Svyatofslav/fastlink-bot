@@ -16,8 +16,13 @@ from handlers.client.subscriptions import (
 from keyboards.client import CB_MENU_MY_SUBS, CB_SUB_EXTEND, CB_SUB_HELP, CB_SUB_PREFIX
 from services.payment import PaymentService
 from states.purchase import DATA_SERVER_ID, PurchaseStates
-from tests.factories import make_server, make_subscription, make_tariff, make_user
-from tests.helpers import make_callback, make_fsm_context
+from tests.pytest.factories import (
+    make_server,
+    make_subscription,
+    make_tariff,
+    make_user,
+)
+from tests.pytest.helpers import make_callback, make_fsm_context
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

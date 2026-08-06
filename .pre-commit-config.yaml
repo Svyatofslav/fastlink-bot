@@ -45,7 +45,7 @@ repos:
     rev: "1.7.9"
     hooks:
       - id: bandit
-        args: ["-c", "bandit.yaml", "-r", "."]
+        args: ["-c", "tooling/bandit.yaml", "-r", "."]
         pass_filenames: false
 
   - repo: https://github.com/pypa/pip-audit
@@ -58,7 +58,7 @@ repos:
     rev: v8.24.2
     hooks:
       - id: gitleaks
-        args: ["--staged", "--config", "gitleaks.toml", "-v", "--redact"]
+        args: ["--staged", "--config", "tooling/gitleaks.toml", "-v", "--redact"]
 
   - repo: https://github.com/jendrikseipp/vulture
     rev: v2.14
@@ -69,7 +69,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest with coverage gate (min 70%)
-        entry: .venv/bin/python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=70
+        entry: .venv/bin/python -m pytest -q --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
         language: system
         pass_filenames: false
         types: [python]

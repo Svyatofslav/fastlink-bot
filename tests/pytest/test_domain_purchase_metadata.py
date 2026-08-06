@@ -9,7 +9,7 @@ from domain.purchase_metadata import (
     build_yookassa_flat_metadata,
 )
 from states.purchase import DATA_EXTEND_SUBSCRIPTION_ID, DATA_IS_EXTEND
-from tests.factories import make_server, make_tariff, make_user
+from tests.pytest.factories import make_server, make_tariff, make_user
 
 # ---------------------------------------------------------------------------
 # build_subscription_dates

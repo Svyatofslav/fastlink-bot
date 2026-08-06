@@ -3,7 +3,7 @@
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 
 secrets-scan:
-	gitleaks detect --source . --config gitleaks.toml -v --redact
+	gitleaks detect --source . --config tooling/gitleaks.toml -v --redact
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -18,7 +18,7 @@ typecheck:
 	$(PYTHON) -m mypy . --config-file=pyproject.toml
 
 security:
-	$(PYTHON) -m bandit -c bandit.yaml -r .
+	$(PYTHON) -m bandit -c tooling/bandit.yaml -r .
 
 audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
@@ -27,6 +27,6 @@ deadcode:
 	$(PYTHON) -m vulture
 
 test:
-	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=70
+	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
 
 check: lint typecheck security secrets-scan audit deadcode test

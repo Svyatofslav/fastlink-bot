@@ -12,8 +12,8 @@ from handlers.client.donation import on_donate_clicked, on_donation_amount_enter
 from keyboards.client import CB_MENU_DONATE
 from services.payment import PaymentService
 from states.donation import DATA_DONATION_PAYMENT_IN_PROGRESS, DonationStates
-from tests.factories import make_user
-from tests.helpers import make_callback, make_fsm_context, make_message
+from tests.pytest.factories import make_user
+from tests.pytest.helpers import make_callback, make_fsm_context, make_message
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

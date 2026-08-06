@@ -8,8 +8,8 @@ from database.enums import PaymentStatus
 from handlers.client.payment import on_payment_cancel, on_payment_check
 from keyboards.client import CB_PAYMENT_CANCEL, CB_PAYMENT_CHECK
 from states.purchase import PurchaseStates, build_purchase_data
-from tests.factories import make_payment, make_user
-from tests.helpers import make_callback, make_fsm_context
+from tests.pytest.factories import make_payment, make_user
+from tests.pytest.helpers import make_callback, make_fsm_context
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

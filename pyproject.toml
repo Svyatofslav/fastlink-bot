@@ -1,8 +1,9 @@
 [tool.coverage.run]
+data_file = "tests/reports/.coverage"
 source = ["."]
 omit = [
     "alembic/*",
-    "tests/*",
+    "tests/**",
     "conftest.py",
     ".venv/*",
     "venv/*",
