@@ -252,6 +252,14 @@ jobs:
           COMMIT_SHA="$(git rev-parse HEAD)"
           ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" record-success "$COMMIT_SHA" "${{ steps.mode.outputs.source }}"
 
+      - name: Cleanup old Docker images
+        if: success() && steps.mode.outputs.dry_run == 'false'
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" cleanup-images
+
       - name: Rollback on failure
         if: failure() && steps.mode.outputs.dry_run == 'false'
         timeout-minutes: 8
