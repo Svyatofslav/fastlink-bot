@@ -1,7 +1,7 @@
 -r requirements.txt
 ruff==0.15.17
 pre-commit==4.2.0
-pytest==8.4.1
+pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 fakeredis==2.31.1

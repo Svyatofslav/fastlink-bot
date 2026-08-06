@@ -22,6 +22,7 @@ security:
 
 audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
+	$(PYTHON) -m pip_audit -r requirements-dev.txt
 
 deadcode:
 	$(PYTHON) -m vulture

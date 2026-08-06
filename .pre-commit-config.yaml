@@ -52,7 +52,11 @@ repos:
     rev: v2.9.0
     hooks:
       - id: pip-audit
+        name: pip-audit (runtime deps)
         args: ["-r", "requirements.txt"]
+      - id: pip-audit
+        name: pip-audit (dev deps)
+        args: ["-r", "requirements-dev.txt"]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.2
