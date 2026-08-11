@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
     from settings_schema import Settings
 
+
 class AdminSessionMiddleware(BaseMiddleware):
     """
     Middleware для admin-сессий.

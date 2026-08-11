@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-bash tooling/check-tool-versions.sh

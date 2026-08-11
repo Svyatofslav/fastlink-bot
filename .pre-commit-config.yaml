@@ -99,6 +99,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-tool-versions
+        name: check pinned tool versions (node/npm/jscpd/gitleaks)
+        entry: bash tooling/check-tool-versions.sh
+        language: system
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: jscpd
         name: duplicate code detector (jscpd)
         language: system

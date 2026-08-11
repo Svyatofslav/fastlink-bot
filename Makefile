@@ -4,8 +4,8 @@ PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 LINT_IMPORTS := $(if $(wildcard .venv/bin/lint-imports),.venv/bin/lint-imports,lint-imports)
 
 install-hooks:
-	chmod +x tooling/git-hooks/pre-commit
-	ln -sf ../../tooling/git-hooks/pre-commit .git/hooks/pre-commit
+	pre-commit install
+	pre-commit install --hook-type pre-push
 
 secrets-scan:
 	gitleaks detect --source . --config tooling/gitleaks.toml -v --redact
