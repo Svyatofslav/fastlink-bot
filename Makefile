@@ -1,6 +1,11 @@
-.PHONY: secrets-scan lint lint-fix format typecheck security audit deadcode test test-docker check check-server
+.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix duplication migrations-check migrations-check-server test test-docker check check-server
 
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
+LINT_IMPORTS := $(if $(wildcard .venv/bin/lint-imports),.venv/bin/lint-imports,lint-imports)
+
+install-hooks:
+	chmod +x tooling/git-hooks/pre-commit
+	ln -sf ../../tooling/git-hooks/pre-commit .git/hooks/pre-commit
 
 secrets-scan:
 	gitleaks detect --source . --config tooling/gitleaks.toml -v --redact
@@ -24,8 +29,49 @@ audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
 	$(PYTHON) -m pip_audit -r requirements-dev.txt
 
+check-tool-versions:
+	bash tooling/check-tool-versions.sh
+
 deadcode:
 	$(PYTHON) -m vulture
+
+deps:
+	$(PYTHON) -m deptry .
+
+architecture:
+	$(LINT_IMPORTS) --config tooling/import-linter.cfg
+
+architecture-diagram:
+	.venv/bin/pydeps database --max-cluster-size=10 --max-bacon=2 -T svg \
+	  -o tests/reports/dependencies-db.svg \
+	  --only handlers webhooks scheduler tasks middlewares services clients infrastructure database domain schemas keyboards states utils --noshow
+	.venv/bin/pydeps services --max-cluster-size=10 --max-bacon=2 -T svg \
+	  -o tests/reports/dependencies-services.svg \
+	  --only handlers webhooks scheduler tasks middlewares services clients infrastructure database domain schemas keyboards states utils --noshow
+
+complexity-report:
+	$(PYTHON) -m radon cc . -a -nc -j --exclude "alembic/*,.venv/*,venv/*,tests/*" > tests/reports/complexity-cc.json
+	$(PYTHON) -m radon mi . -j --exclude "alembic/*,.venv/*,venv/*,tests/*" > tests/reports/complexity-mi.json
+	$(PYTHON) -m radon cc . -a -nc --exclude "alembic/*,.venv/*,venv/*,tests/*"
+	$(PYTHON) -m radon mi . --exclude "alembic/*,.venv/*,venv/*,tests/*"
+
+complexity-gate:
+	$(PYTHON) -m xenon --max-absolute B --max-modules B --max-average A --exclude "alembic/*,.venv/*,venv/*,tests/*" .
+
+sql-lint:
+	$(PYTHON) -m sqlfluff lint database/sql --config tooling/.sqlfluff
+
+sql-fix:
+	$(PYTHON) -m sqlfluff fix database/sql --config tooling/.sqlfluff
+
+duplication:
+	jscpd --config tooling/.jscpd.json .
+
+migrations-check:
+	@bash -c 'set -o pipefail; $(PYTHON) -m alembic check 2>&1 | grep -v "^INFO"'
+
+migrations-check-server:
+	docker compose run --rm --user root bot bash -lc 'set -o pipefail; alembic check 2>&1 | grep -v "^INFO"'
 
 test:
 	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
@@ -38,6 +84,6 @@ test-docker:
 	  -v "$(CURDIR)/tests/reports:/app/tests/reports" \
 	  bot bash -lc "pip install -r requirements-dev.txt --quiet && python -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70"
 
-check: lint typecheck security secrets-scan audit deadcode test
+check: install-hooks lint typecheck security secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint duplication migrations-check test
 
-check-server: lint typecheck security secrets-scan audit deadcode test-docker
+check-server: lint typecheck security secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint duplication migrations-check-server test-docker

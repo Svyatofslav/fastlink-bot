@@ -140,11 +140,23 @@ class PaymentService:
             )
             raise
 
-        return await self._payments.update(
+        updated_payment = await self._payments.update(
             payment,
             provider_payment_id=link.provider_payment_id,
             confirmation_url=link.confirmation_url,
         )
+
+        if updated_payment.confirmation_url is None:
+            # Не должно происходить: YooKassaPaymentLink.confirmation_url — обязательное
+            # строковое поле (clients/yookassa.py), FakeYooKassaClient всегда отдаёт
+            # заглушку. Проверка — защита от будущих изменений контракта клиента,
+            # а не ожидаемый бизнес-сценарий.
+            raise RuntimeError(
+                f"Payment {updated_payment.id} создан без confirmation_url — "
+                "нарушен контракт платёжного клиента"
+            )
+
+        return updated_payment
 
     async def attach_provider_payment_id(
         self,

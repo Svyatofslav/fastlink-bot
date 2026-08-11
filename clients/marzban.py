@@ -210,6 +210,17 @@ class MarzbanClient:
             raise last_error
         raise MarzbanRequestError("Marzban request failed without specific error")
 
+    def _parse_user_info(self, data: dict) -> MarzbanUserInfo:
+        """Собрать MarzbanUserInfo из JSON-ответа Marzban (используется в create_user/get_user)."""
+        return MarzbanUserInfo(
+            username=data["username"],
+            enabled=data.get("enabled", True),
+            data_limit_bytes=data.get("data_limit_bytes", 0),
+            data_used_bytes=data.get("data_used_bytes", 0),
+            expiry_timestamp=data.get("expiry_timestamp"),
+            config_links=list(data.get("links", [])),
+        )
+
     def build_subscription_url(self, token: str) -> str:
         """
         Построить subscription URL для VPN-клиента.
@@ -254,16 +265,7 @@ class MarzbanClient:
             path="/users",
             json=body,
         )
-        data = resp.json()
-
-        return MarzbanUserInfo(
-            username=data["username"],
-            enabled=data.get("enabled", True),
-            data_limit_bytes=data.get("data_limit_bytes", 0),
-            data_used_bytes=data.get("data_used_bytes", 0),
-            expiry_timestamp=data.get("expiry_timestamp"),
-            config_links=list(data.get("links", [])),
-        )
+        return self._parse_user_info(resp.json())
 
     async def get_user(self, username: str) -> MarzbanUserInfo:
         """
@@ -276,16 +278,7 @@ class MarzbanClient:
             method="GET",
             path=f"/users/{username}",
         )
-        data = resp.json()
-
-        return MarzbanUserInfo(
-            username=data["username"],
-            enabled=data.get("enabled", True),
-            data_limit_bytes=data.get("data_limit_bytes", 0),
-            data_used_bytes=data.get("data_used_bytes", 0),
-            expiry_timestamp=data.get("expiry_timestamp"),
-            config_links=list(data.get("links", [])),
-        )
+        return self._parse_user_info(resp.json())
 
     async def set_user_traffic(
         self,

@@ -67,8 +67,6 @@ module = [
     "sqlalchemy.*",
     "alembic",
     "alembic.*",
-    "apscheduler",
-    "apscheduler.*",
     "qrcode",
     "qrcode.*",
 ]
@@ -151,3 +149,12 @@ ignore = [
 paths = ["bot.py", "clients", "database", "domain", "handlers", "infrastructure", "keyboards", "middlewares", "scheduler", "schemas", "services", "tasks", "utils", "webhooks", "worker.py", "config.py", "settings_schema.py"]
 exclude = ["alembic/", "tests/", ".venv/"]
 min_confidence = 80
+
+[tool.deptry]
+extend_exclude = ["alembic"]
+known_first_party = ["infrastructure"]
+github_output = true
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["asyncpg", "pillow"]
+DEP004 = ["fakeredis"]

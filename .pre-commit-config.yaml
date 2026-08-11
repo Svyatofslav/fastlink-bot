@@ -5,6 +5,10 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: detect-private-key
+      - id: check-toml
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.17
@@ -27,7 +31,6 @@ repos:
           - alembic==1.16.2
           - httpx==0.28.1
           - redis==5.2.1
-          - apscheduler==3.10.4
           - arq==0.26.3
           - qrcode==8.2
           - pillow==12.3.0
@@ -68,6 +71,49 @@ repos:
     rev: v2.14
     hooks:
       - id: vulture
+
+  - repo: https://github.com/osprey-oss/deptry.git
+    rev: "0.25.1"
+    hooks:
+      - id: deptry
+
+  - repo: https://github.com/seddonym/import-linter
+    rev: "v2.13"
+    hooks:
+      - id: import-linter
+        args: ["--config", "tooling/import-linter.cfg"]
+
+  - repo: https://github.com/rubik/xenon
+    rev: "v0.9.3"
+    hooks:
+      - id: xenon
+        args: ["--max-absolute", "B", "--max-modules", "B", "--max-average", "A", "--exclude", "alembic/*,.venv/*,venv/*,tests/*"]
+
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.2.2
+    hooks:
+      - id: sqlfluff-lint
+        args: ["--config", "tooling/.sqlfluff"]
+      - id: sqlfluff-fix
+        args: ["--config", "tooling/.sqlfluff"]
+
+  - repo: local
+    hooks:
+      - id: jscpd
+        name: duplicate code detector (jscpd)
+        language: system
+        entry: jscpd
+        args: ["--config", "tooling/.jscpd.json"]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: alembic-check
+        name: alembic check (models vs migrations)
+        entry: bash -c '.venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
 
   - repo: local
     hooks:

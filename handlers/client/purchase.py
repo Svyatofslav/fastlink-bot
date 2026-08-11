@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from aiogram import Router
@@ -10,6 +10,7 @@ from database.enums import PaymentProvider
 from database.repo.servers import ServerRepo
 from database.repo.tariffs import TariffRepo
 from domain.purchase_metadata import build_purchase_metadata
+from handlers.client.callback_utils import extract_callback_id as _extract_callback_id
 from keyboards.client import (
     CB_CONFIRM_PAY,
     CB_MENU_BACK_TO_TARIFFS,
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from aiogram.types import CallbackQuery, Message
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from database.models import User
+    from database.models import Server, Tariff, User
 
 router = Router(name="client-purchase")
 logger = structlog.get_logger(__name__)
@@ -54,15 +55,28 @@ def _get_callback_message(callback: CallbackQuery) -> Message | None:
     return cast("Message", message)
 
 
-def _extract_callback_id(data: str | None, prefix: str) -> int | None:
-    if data is None or not data.startswith(f"{prefix}:"):
+async def _load_validated_purchase_context(
+    session: AsyncSession, data: dict[str, Any]
+) -> tuple[Server, Tariff, str] | None:
+    server_id = data.get(DATA_SERVER_ID)
+    tariff_id = data.get(DATA_TARIFF_ID)
+    idempotency_key = data.get(DATA_IDEMPOTENCY_KEY)
+
+    if not isinstance(server_id, int) or not isinstance(tariff_id, int):
+        return None
+    if not isinstance(idempotency_key, str) or not idempotency_key:
         return None
 
-    raw_id = data.rsplit(":", 1)[-1]
-    if not raw_id.isdigit():
+    servers_repo = ServerRepo(session)
+    tariffs_repo = TariffRepo(session)
+
+    server = await servers_repo.get_by_id_active(server_id)
+    tariff = await tariffs_repo.get_by_id_active(tariff_id)
+
+    if server is None or tariff is None:
         return None
 
-    return int(raw_id)
+    return server, tariff, idempotency_key
 
 
 @router.callback_query(lambda c: c.data == CB_MENU_BUY)
@@ -313,11 +327,8 @@ async def on_confirm_pay(
 
     await state.update_data({DATA_PAYMENT_IN_PROGRESS: True})
 
-    server_id = data.get(DATA_SERVER_ID)
-    tariff_id = data.get(DATA_TARIFF_ID)
-    idempotency_key = data.get(DATA_IDEMPOTENCY_KEY)
-
-    if not isinstance(server_id, int) or not isinstance(tariff_id, int):
+    purchase_context = await _load_validated_purchase_context(session, data)
+    if purchase_context is None:
         await callback.answer(t("purchase.data_expired", lang), show_alert=True)
         await clear_purchase_state(state)
         await message.edit_text(
@@ -326,29 +337,7 @@ async def on_confirm_pay(
         )
         return
 
-    if not isinstance(idempotency_key, str) or not idempotency_key:
-        await callback.answer(t("purchase.data_expired", lang), show_alert=True)
-        await clear_purchase_state(state)
-        await message.edit_text(
-            t("main.menu.title", lang),
-            reply_markup=main_menu_kb(user),
-        )
-        return
-
-    servers_repo = ServerRepo(session)
-    tariffs_repo = TariffRepo(session)
-
-    server = await servers_repo.get_by_id_active(server_id)
-    tariff = await tariffs_repo.get_by_id_active(tariff_id)
-
-    if server is None or tariff is None:
-        await callback.answer(t("purchase.data_expired", lang), show_alert=True)
-        await clear_purchase_state(state)
-        await message.edit_text(
-            t("main.menu.title", lang),
-            reply_markup=main_menu_kb(user),
-        )
-        return
+    server, tariff, idempotency_key = purchase_context
 
     metadata_snapshot = build_purchase_metadata(
         user=user,
@@ -383,14 +372,8 @@ async def on_confirm_pay(
         )
         return
 
-    confirmation_url = payment.confirmation_url
-    if confirmation_url is None:
-        await state.update_data({DATA_PAYMENT_IN_PROGRESS: False})
-        await callback.answer(
-            t("purchase.create_failed", lang),
-            show_alert=True,
-        )
-        return
+    # confirmation_url гарантирован PaymentService.create_payment() — см. там же.
+    confirmation_url = cast("str", payment.confirmation_url)
 
     await state.set_state(PurchaseStates.awaiting_payment)
 

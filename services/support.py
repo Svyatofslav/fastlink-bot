@@ -26,6 +26,13 @@ class SupportService:
         self._tickets = SupportTicketRepo(session)
         self._messages = SupportMessageRepo(session)
 
+    async def _get_ticket_or_raise(self, ticket_id: int) -> SupportTicket:
+        """Общая проверка существования тикета для всех операций над ним."""
+        ticket = await self._tickets.get_by_id(ticket_id)
+        if ticket is None:
+            raise ValueError(f"SupportTicket {ticket_id} not found")
+        return ticket
+
     async def create_ticket(
         self,
         *,
@@ -64,9 +71,7 @@ class SupportService:
     async def add_user_message(
         self, *, ticket_id: int, sender_telegram_id: int, text: str
     ) -> SupportMessage:
-        ticket = await self._tickets.get_by_id(ticket_id)
-        if ticket is None:
-            raise ValueError(f"SupportTicket {ticket_id} not found")
+        ticket = await self._get_ticket_or_raise(ticket_id)
 
         message = await self._messages.create(
             ticket_id=ticket_id,
@@ -85,9 +90,7 @@ class SupportService:
     async def add_admin_reply(
         self, *, ticket_id: int, admin_id: int, admin_telegram_id: int, text: str
     ) -> SupportMessage:
-        ticket = await self._tickets.get_by_id(ticket_id)
-        if ticket is None:
-            raise ValueError(f"SupportTicket {ticket_id} not found")
+        ticket = await self._get_ticket_or_raise(ticket_id)
 
         message = await self._messages.create(
             ticket_id=ticket_id,
@@ -107,9 +110,7 @@ class SupportService:
         return message
 
     async def assign(self, *, ticket_id: int, admin_id: int) -> SupportTicket:
-        ticket = await self._tickets.get_by_id(ticket_id)
-        if ticket is None:
-            raise ValueError(f"SupportTicket {ticket_id} not found")
+        ticket = await self._get_ticket_or_raise(ticket_id)
         return await self._tickets.update(
             ticket,
             assigned_admin_id=admin_id,
@@ -119,9 +120,7 @@ class SupportService:
         )
 
     async def close(self, *, ticket_id: int) -> SupportTicket:
-        ticket = await self._tickets.get_by_id(ticket_id)
-        if ticket is None:
-            raise ValueError(f"SupportTicket {ticket_id} not found")
+        ticket = await self._get_ticket_or_raise(ticket_id)
         return await self._tickets.update(
             ticket,
             status=SupportTicketStatus.CLOSED,

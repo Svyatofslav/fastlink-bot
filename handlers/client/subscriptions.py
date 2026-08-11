@@ -14,6 +14,8 @@ from database.repo.servers import ServerRepo
 from database.repo.subscriptions import SubscriptionRepo
 from database.repo.tariffs import TariffRepo
 from domain.purchase_metadata import build_purchase_metadata
+from domain.subscription_extension import compute_extension
+from handlers.client.callback_utils import extract_callback_id as _extract_callback_id
 from handlers.client.menu import render_main_menu
 from keyboards.client import (
     CB_MENU_MY_SUBS,
@@ -39,7 +41,7 @@ from states.purchase import (
     build_purchase_data,
     clear_purchase_state,
 )
-from utils.format import format_date, format_price, format_traffic
+from utils.format import format_data_limit, format_date, format_price, format_traffic
 from utils.i18n import t
 
 if TYPE_CHECKING:
@@ -60,15 +62,54 @@ def _get_callback_message(callback: CallbackQuery) -> Message | None:
     return cast("Message", message)
 
 
-def _extract_callback_id(data: str | None, prefix: str) -> int | None:
-    if data is None or not data.startswith(f"{prefix}:"):
-        return None
+def _build_subscription_card_context(
+    subscription: Subscription,
+    server: Server | None,
+    tariff: Tariff | None,
+    lang: str,
+) -> dict[str, str]:
+    server_name = server.name if server else t("subs.server_fallback", lang)
+    tariff_name = tariff.name if tariff else t("subs.tariff_fallback", lang)
 
-    raw_id = data.rsplit(":", 1)[-1]
-    if not raw_id.isdigit():
-        return None
+    status_value = getattr(subscription.status, "value", subscription.status)
+    status_label = (
+        t("subs.status_active", lang)
+        if status_value == SubscriptionStatus.ACTIVE.value
+        else t("subs.status_disabled", lang)
+    )
 
-    return int(raw_id)
+    period_text = t(
+        "subs.period_line",
+        lang,
+        starts_at=format_date(subscription.starts_at),
+        expires_at=format_date(subscription.expires_at),
+    )
+
+    price_text = ""
+    if tariff is not None:
+        price_text = t(
+            "subs.price_line",
+            lang,
+            price=format_price(tariff.price_amount, tariff.price_currency),
+        )
+
+    traffic_text = ""
+    data_limit = subscription.data_limit_bytes
+    if data_limit and data_limit > 0:
+        traffic_text = t(
+            "subs.traffic_line",
+            lang,
+            traffic=format_traffic(subscription.data_used_bytes, data_limit),
+        )
+
+    return {
+        "server_name": server_name,
+        "tariff_name": tariff_name,
+        "status_label": status_label,
+        "period_line": period_text,
+        "price_line": price_text,
+        "traffic_line": traffic_text,
+    }
 
 
 def _make_qr_bytes(data: str) -> bytes:
@@ -76,6 +117,70 @@ def _make_qr_bytes(data: str) -> bytes:
     buf = io.BytesIO()
     img.save(buf)
     return buf.getvalue()
+
+
+async def _get_owned_subscription(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    user: User,
+    prefix: str,
+) -> Subscription | None:
+    """Достаёт подписку по callback_data и проверяет, что она принадлежит пользователю."""
+    lang = user.language_code or "ru"
+    sub_id = _extract_callback_id(callback.data, prefix)
+    if sub_id is None:
+        await callback.answer(t("subs.invalid_id", lang), show_alert=True)
+        return None
+
+    subscription = await SubscriptionRepo(session).get_by_id(sub_id)
+    if subscription is None or subscription.user_id != user.id:
+        await callback.answer(t("subs.not_found", lang), show_alert=True)
+        return None
+
+    return subscription
+
+
+async def _get_marzban_config_link(
+    subscription: Subscription,
+    lang: str,
+    callback: CallbackQuery,
+) -> str | None:
+    """Забирает актуальную config-ссылку из Marzban для подписки."""
+    marzban = MarzbanClient()
+    try:
+        user_info = await marzban.get_user(subscription.marzban_username)
+    except MarzbanClientError:
+        await callback.answer(t("subs.config_link_failed", lang), show_alert=True)
+        return None
+    finally:
+        await marzban.aclose()
+
+    config_link = marzban.get_primary_config_link(user_info)
+    if config_link is None:
+        await callback.answer(t("subs.config_link_unavailable", lang), show_alert=True)
+        return None
+
+    return config_link
+
+
+async def _prepare_subscription_action(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    user: User,
+    prefix: str,
+) -> tuple[Message, Subscription] | None:
+    """Общая подготовка: проверка сообщения + владение подпиской.
+    Используется в on_subscription_link/qr/config_link/config_qr."""
+    message = _get_callback_message(callback)
+    if message is None:
+        await callback.answer()
+        return None
+
+    subscription = await _get_owned_subscription(callback, session, user, prefix)
+    if subscription is None:
+        return None
+
+    return message, subscription
 
 
 @router.callback_query(lambda c: c.data == CB_MENU_MY_SUBS)
@@ -156,67 +261,24 @@ async def on_subscription_card(
         await callback.answer(t("subs.not_found", lang), show_alert=True)
         return
 
-    server = None
-    if subscription.server_id is not None:
-        server = await servers_repo.get_by_id_active(subscription.server_id)
-
-    tariff = None
-    if subscription.tariff_id is not None:
-        tariff = await tariffs_repo.get_by_id_active(subscription.tariff_id)
-
-    server_name = server.name if server else t("subs.server_fallback", lang)
-    tariff_name = tariff.name if tariff else t("subs.tariff_fallback", lang)
-
-    status_value = getattr(subscription.status, "value", subscription.status)
-    status_label = (
-        t("subs.status_active", lang)
-        if status_value == SubscriptionStatus.ACTIVE.value
-        else t("subs.status_disabled", lang)
+    server = (
+        await servers_repo.get_by_id_active(subscription.server_id)
+        if subscription.server_id is not None
+        else None
     )
-
-    starts_at = subscription.starts_at
-    expires_at = subscription.expires_at
-    data_limit = subscription.data_limit_bytes
-    data_used = subscription.data_used_bytes
-
-    period_text = t(
-        "subs.period_line",
-        lang,
-        starts_at=format_date(starts_at),
-        expires_at=format_date(expires_at),
+    tariff = (
+        await tariffs_repo.get_by_id_active(subscription.tariff_id)
+        if subscription.tariff_id is not None
+        else None
     )
-
-    price_text = ""
-    if tariff is not None:
-        price_text = t(
-            "subs.price_line",
-            lang,
-            price=format_price(tariff.price_amount, tariff.price_currency),
-        )
-
-    traffic_text = ""
-    if data_limit and data_limit > 0:
-        traffic_text = t(
-            "subs.traffic_line",
-            lang,
-            traffic=format_traffic(data_used, data_limit),
-        )
 
     text = t(
         "subs.card_details",
         lang,
-        server_name=server_name,
-        tariff_name=tariff_name,
-        status_label=status_label,
-        period_line=period_text,
-        price_line=price_text,
-        traffic_line=traffic_text,
+        **_build_subscription_card_context(subscription, server, tariff, lang),
     )
 
-    await message.edit_text(
-        text,
-        reply_markup=subscription_card_kb(subscription, user),
-    )
+    await message.edit_text(text, reply_markup=subscription_card_kb(subscription, user))
     await callback.answer()
 
 
@@ -259,13 +321,19 @@ async def _extend_with_active_tariff(
         await callback.answer(t("purchase.create_failed", lang), show_alert=True)
         return
 
-    confirmation_url = payment.confirmation_url
-    if confirmation_url is None:
-        await callback.answer(t("purchase.create_failed", lang), show_alert=True)
-        return
+    # confirmation_url гарантирован PaymentService.create_payment() — см. там же.
+    confirmation_url = cast("str", payment.confirmation_url)
+
+    new_expires_at, new_data_limit_bytes = compute_extension(subscription, tariff)
 
     price = format_price(payment.amount, payment.currency)
-    text = t("purchase.payment_created", lang, price=price)
+    text = t(
+        "purchase.extend_payment_created",
+        lang,
+        price=price,
+        new_expires_at=format_date(new_expires_at),
+        new_traffic=format_data_limit(new_data_limit_bytes),
+    )
     await message.edit_text(
         text,
         reply_markup=payment_kb(payment.id, confirmation_url, user),
@@ -418,22 +486,12 @@ async def on_subscription_link(
     session: AsyncSession,
     user: User,
 ) -> None:
-    message = _get_callback_message(callback)
-    if message is None:
-        await callback.answer()
+    prepared = await _prepare_subscription_action(callback, session, user, CB_SUB_LINK)
+    if prepared is None:
         return
+    message, subscription = prepared
 
     lang = user.language_code or "ru"
-    sub_id = _extract_callback_id(callback.data, CB_SUB_LINK)
-    if sub_id is None:
-        await callback.answer(t("subs.invalid_id", lang), show_alert=True)
-        return
-
-    subscription = await SubscriptionRepo(session).get_by_id(sub_id)
-    if subscription is None or subscription.user_id != user.id:
-        await callback.answer(t("subs.not_found", lang), show_alert=True)
-        return
-
     await message.answer(
         t("subs.link_message", lang, url=subscription.subscription_url)
     )
@@ -449,22 +507,12 @@ async def on_subscription_qr(
     session: AsyncSession,
     user: User,
 ) -> None:
-    message = _get_callback_message(callback)
-    if message is None:
-        await callback.answer()
+    prepared = await _prepare_subscription_action(callback, session, user, CB_SUB_QR)
+    if prepared is None:
         return
+    message, subscription = prepared
 
     lang = user.language_code or "ru"
-    sub_id = _extract_callback_id(callback.data, CB_SUB_QR)
-    if sub_id is None:
-        await callback.answer(t("subs.invalid_id", lang), show_alert=True)
-        return
-
-    subscription = await SubscriptionRepo(session).get_by_id(sub_id)
-    if subscription is None or subscription.user_id != user.id:
-        await callback.answer(t("subs.not_found", lang), show_alert=True)
-        return
-
     qr_bytes = _make_qr_bytes(subscription.subscription_url)
     await message.answer_photo(
         BufferedInputFile(qr_bytes, filename="subscription_qr.png"),
@@ -482,34 +530,16 @@ async def on_subscription_config_link(
     session: AsyncSession,
     user: User,
 ) -> None:
-    message = _get_callback_message(callback)
-    if message is None:
-        await callback.answer()
+    prepared = await _prepare_subscription_action(
+        callback, session, user, CB_SUB_CONFIG_LINK
+    )
+    if prepared is None:
         return
+    message, subscription = prepared
 
     lang = user.language_code or "ru"
-    sub_id = _extract_callback_id(callback.data, CB_SUB_CONFIG_LINK)
-    if sub_id is None:
-        await callback.answer(t("subs.invalid_id", lang), show_alert=True)
-        return
-
-    subscription = await SubscriptionRepo(session).get_by_id(sub_id)
-    if subscription is None or subscription.user_id != user.id:
-        await callback.answer(t("subs.not_found", lang), show_alert=True)
-        return
-
-    marzban = MarzbanClient()
-    try:
-        user_info = await marzban.get_user(subscription.marzban_username)
-    except MarzbanClientError:
-        await callback.answer(t("subs.config_link_failed", lang), show_alert=True)
-        return
-    finally:
-        await marzban.aclose()
-
-    config_link = marzban.get_primary_config_link(user_info)
+    config_link = await _get_marzban_config_link(subscription, lang, callback)
     if config_link is None:
-        await callback.answer(t("subs.config_link_unavailable", lang), show_alert=True)
         return
 
     await message.answer(t("subs.config_link_message", lang, url=config_link))
@@ -525,34 +555,16 @@ async def on_subscription_config_qr(
     session: AsyncSession,
     user: User,
 ) -> None:
-    message = _get_callback_message(callback)
-    if message is None:
-        await callback.answer()
+    prepared = await _prepare_subscription_action(
+        callback, session, user, CB_SUB_CONFIG_QR
+    )
+    if prepared is None:
         return
+    message, subscription = prepared
 
     lang = user.language_code or "ru"
-    sub_id = _extract_callback_id(callback.data, CB_SUB_CONFIG_QR)
-    if sub_id is None:
-        await callback.answer(t("subs.invalid_id", lang), show_alert=True)
-        return
-
-    subscription = await SubscriptionRepo(session).get_by_id(sub_id)
-    if subscription is None or subscription.user_id != user.id:
-        await callback.answer(t("subs.not_found", lang), show_alert=True)
-        return
-
-    marzban = MarzbanClient()
-    try:
-        user_info = await marzban.get_user(subscription.marzban_username)
-    except MarzbanClientError:
-        await callback.answer(t("subs.config_link_failed", lang), show_alert=True)
-        return
-    finally:
-        await marzban.aclose()
-
-    config_link = marzban.get_primary_config_link(user_info)
+    config_link = await _get_marzban_config_link(subscription, lang, callback)
     if config_link is None:
-        await callback.answer(t("subs.config_link_unavailable", lang), show_alert=True)
         return
 
     qr_bytes = _make_qr_bytes(config_link)

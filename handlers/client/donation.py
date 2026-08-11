@@ -128,11 +128,8 @@ async def on_donation_amount_entered(
         await message.answer(t("purchase.create_failed", lang))
         return
 
-    confirmation_url = payment.confirmation_url
-    if confirmation_url is None:
-        await state.update_data({DATA_DONATION_PAYMENT_IN_PROGRESS: False})
-        await message.answer(t("purchase.create_failed", lang))
-        return
+    # confirmation_url гарантирован PaymentService.create_payment() — см. там же.
+    confirmation_url = cast("str", payment.confirmation_url)
 
     await state.set_state(DonationStates.awaiting_payment)
     price = format_price(payment.amount, payment.currency)

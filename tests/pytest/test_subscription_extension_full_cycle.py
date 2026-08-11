@@ -93,7 +93,7 @@ def _build_extension_metadata_snapshot(user, server, tariff, subscription):
 
 
 @pytest.mark.asyncio
-async def test_extension_payment_extends_expires_at_and_resets_traffic(
+async def test_extension_payment_extends_expires_at_and_carries_over_traffic(
     db_session: AsyncSession, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -105,6 +105,7 @@ async def test_extension_payment_extends_expires_at_and_resets_traffic(
         db_session, days_left=5
     )
     old_expires_at = subscription.expires_at
+    old_data_limit_bytes = subscription.data_limit_bytes
 
     payment_service = PaymentService(db_session)
     metadata_snapshot = _build_extension_metadata_snapshot(
@@ -159,9 +160,13 @@ async def test_extension_payment_extends_expires_at_and_resets_traffic(
     updated: Subscription = result.scalars().one()
 
     expected_expires_at = old_expires_at + timedelta(days=tariff.duration_days)
+    expected_data_limit_bytes = old_data_limit_bytes + tariff.data_limit_bytes
+
     assert abs((updated.expires_at - expected_expires_at).total_seconds()) < 2
-    assert updated.data_used_bytes == 0
-    assert updated.data_limit_bytes == tariff.data_limit_bytes
+    # data_used_bytes не сбрасывается — остаток трафика переносится в новый лимит
+    # (data_limit_bytes = старый лимит + лимит тарифа), а не заменяется на него.
+    assert updated.data_used_bytes == 4_500_000
+    assert updated.data_limit_bytes == expected_data_limit_bytes
 
 
 @pytest.mark.asyncio

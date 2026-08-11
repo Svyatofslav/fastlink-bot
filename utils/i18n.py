@@ -165,6 +165,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             'After payment, press "Check payment".'
         ),
     },
+    "purchase.extend_payment_created": {
+        "ru": (
+            "Продление подписки\n"
+            "Цена: {price}\n\n"
+            "После оплаты новая дата окончания: {new_expires_at}\n"
+            "Итоговый трафик: {new_traffic}\n\n"
+            "Перейдите по кнопке ниже для оплаты. Ссылка действует 15 минут.\n"
+            "После оплаты нажмите «Проверить оплату»."
+        ),
+        "en": (
+            "Subscription extension\n"
+            "Price: {price}\n\n"
+            "New expiration date after payment: {new_expires_at}\n"
+            "Total traffic: {new_traffic}\n\n"
+            "Use the button below to pay. The link is valid for 15 minutes.\n"
+            'After payment, press "Check payment".'
+        ),
+    },
     # Кнопки главного меню (keyboards/client.py)
     "menu.buy_subscription": {
         "ru": "🛒 Купить подписку",

@@ -17,6 +17,23 @@ class NotificationService:
         self._session = session
         self._repo = NotificationRepo(session)
 
+    async def _log(
+        self,
+        *,
+        user_id: int,
+        notification_type: NotificationType,
+        delivery_status: NotificationDeliveryStatus,
+        subscription_id: int | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        await self._repo.log(
+            user_id=user_id,
+            notification_type=notification_type,
+            delivery_status=delivery_status,
+            subscription_id=subscription_id,
+            payload=payload,
+        )
+
     async def was_sent(
         self,
         *,
@@ -52,7 +69,7 @@ class NotificationService:
         subscription_id: int | None = None,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        await self._repo.log(
+        await self._log(
             user_id=user_id,
             notification_type=notification_type,
             delivery_status=NotificationDeliveryStatus.SENT,
@@ -68,7 +85,7 @@ class NotificationService:
         subscription_id: int | None = None,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        await self._repo.log(
+        await self._log(
             user_id=user_id,
             notification_type=notification_type,
             delivery_status=NotificationDeliveryStatus.FAILED,

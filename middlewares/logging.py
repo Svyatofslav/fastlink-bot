@@ -7,6 +7,8 @@ import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+from middlewares._common import extract_tg_user_id
+
 logger = structlog.get_logger(__name__)
 
 
@@ -23,17 +25,13 @@ class LoggingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        tg_user_id: int | None = None
+        tg_user_id = extract_tg_user_id(event)
         payload: str | None = None
         event_type = type(event).__name__
 
         if isinstance(event, Message):
-            if event.from_user:
-                tg_user_id = event.from_user.id
             payload = event.text or event.caption
         elif isinstance(event, CallbackQuery):
-            if event.from_user:
-                tg_user_id = event.from_user.id
             payload = event.data
 
         logger.info(
