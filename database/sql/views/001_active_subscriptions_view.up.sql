@@ -18,8 +18,8 @@ SELECT
     t.duration_days,
     t.price_amount,
     t.price_currency
-FROM subscriptions s
-JOIN users u ON u.id = s.user_id
-JOIN servers srv ON srv.id = s.server_id
-LEFT JOIN tariffs t ON t.id = s.tariff_id
+FROM subscriptions AS s
+INNER JOIN users AS u ON s.user_id = u.id
+INNER JOIN servers AS srv ON s.server_id = srv.id
+LEFT JOIN tariffs AS t ON s.tariff_id = t.id
 WHERE s.status = 'ACTIVE';

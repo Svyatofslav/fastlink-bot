@@ -1,0 +1,23 @@
+{
+  "minLines": 5,
+  "minTokens": 50,
+  "threshold": 0.25,
+  "reporters": ["console"],
+  "format": ["python", "sql", "yaml", "bash"],
+  "ignore": [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/__pycache__/**",
+    "**/alembic/**",
+    "**/tests/**",
+    "**/tests/reports/**",
+    "**/.pytest_cache/**",
+    "**/.mypy_cache/**",
+    "**/.ruff_cache/**",
+    "**/database/models.py"
+  ],
+  "gitignore": true,
+  "noTips": true
+}

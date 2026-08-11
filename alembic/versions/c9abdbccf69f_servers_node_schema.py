@@ -49,12 +49,16 @@ def downgrade() -> None:
         ["status", "expires_at"],
         unique=False,
     )
+    # api_url/api_token восстанавливаются как nullable=True, т.к. их реальные
+    # значения были безвозвратно удалены в upgrade() через drop_column —
+    # восстановить NOT NULL без backfill-данных, которых уже не существует,
+    # невозможно и было бы нечестной имитацией восстановленных данных.
     op.add_column(
-        "servers", sa.Column("api_url", sa.TEXT(), autoincrement=False, nullable=False)
+        "servers", sa.Column("api_url", sa.TEXT(), autoincrement=False, nullable=True)
     )
     op.add_column(
         "servers",
-        sa.Column("api_token", sa.TEXT(), autoincrement=False, nullable=False),
+        sa.Column("api_token", sa.TEXT(), autoincrement=False, nullable=True),
     )
     op.drop_column("servers", "marzban_node_id")
     op.create_index(

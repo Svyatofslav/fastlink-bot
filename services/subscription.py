@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime  # noqa: TC003
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
@@ -10,6 +10,7 @@ from database.models import Subscription, Tariff, User  # noqa: TC001
 from database.repo.subscriptions import SubscriptionRepo
 from database.repo.tariffs import TariffRepo
 from database.repo.users import UserRepo
+from domain.subscription_extension import compute_extension
 from services.admin_actions import AdminActionLogService
 from services.marzban_subscription import SubscriptionMarzbanService
 from services.notifications import NotificationService
@@ -189,13 +190,7 @@ class SubscriptionService:
         if tariff is None:
             raise ValueError(f"Tariff {tariff_id} not found")
 
-        now = datetime.now(UTC)
-        base = (
-            subscription.expires_at
-            if subscription.expires_at and subscription.expires_at > now
-            else now
-        )
-        new_expires_at = base + timedelta(days=tariff.duration_days)
+        new_expires_at, new_data_limit_bytes = compute_extension(subscription, tariff)
 
         was_expired_disabled = (
             subscription.status == SubscriptionStatus.DISABLED
@@ -205,8 +200,7 @@ class SubscriptionService:
         subscription = await self._subscriptions.update(
             subscription,
             expires_at=new_expires_at,
-            data_limit_bytes=tariff.data_limit_bytes,
-            data_used_bytes=0,
+            data_limit_bytes=new_data_limit_bytes,
         )
 
         if was_expired_disabled:

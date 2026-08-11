@@ -12,3 +12,8 @@ types-psycopg2==2.9.21.20250809
 bandit==1.7.9
 pip-audit==2.9.0
 vulture==2.14
+deptry==0.25.1
+import-linter==2.13
+radon==6.0.1
+xenon==0.9.3
+sqlfluff==4.2.2

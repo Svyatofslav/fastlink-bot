@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-import sys
 from contextlib import suppress
 
 import structlog
@@ -16,6 +14,7 @@ from redis.asyncio import Redis
 from config import get_deploy_commit_short, settings
 from database.session import get_async_session_factory
 from handlers import router as root_router
+from logging_setup import configure_logging
 from middlewares import (
     AdminSessionMiddleware,
     DbSessionMiddleware,
@@ -30,19 +29,6 @@ BOT_KEY: web.AppKey[Bot] = web.AppKey("bot", Bot)
 DP_KEY: web.AppKey[Dispatcher] = web.AppKey("dp", Dispatcher)
 REDIS_FSM_KEY: web.AppKey[Redis] = web.AppKey("redis_fsm", Redis)
 REDIS_RATE_LIMIT_KEY: web.AppKey[Redis] = web.AppKey("redis_rate_limit", Redis)
-
-
-def configure_logging() -> None:
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stdout,
-    )
-    structlog.configure(
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, settings.log_level.upper(), logging.INFO)
-        ),
-    )
 
 
 def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
@@ -71,6 +57,23 @@ def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
 
     dp.message.middleware(throttling_middleware)
     dp.callback_query.middleware(throttling_middleware)
+
+
+def build_bot_and_dispatcher() -> tuple[Redis, Redis, Bot, Dispatcher]:
+    """Собирает Redis-клиенты, Bot и Dispatcher с подключёнными мидлварями/роутером."""
+    redis_fsm = Redis.from_url(settings.redis_url_fsm)
+    redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
+
+    storage = RedisStorage(redis=redis_fsm)
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
+    )
+    dp = Dispatcher(storage=storage)
+    setup_middlewares(dp, redis_rate_limit)
+    dp.include_router(root_router)
+
+    return redis_fsm, redis_rate_limit, bot, dp
 
 
 async def healthcheck(_request: web.Request) -> web.Response:
@@ -158,17 +161,7 @@ async def on_shutdown(app: web.Application) -> None:
 async def run_webhook_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
-    redis_fsm = Redis.from_url(settings.redis_url_fsm)
-    redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
-
-    storage = RedisStorage(redis=redis_fsm)
-    bot = Bot(
-        token=settings.bot_token,
-        default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
-    )
-    dp = Dispatcher(storage=storage)
-    setup_middlewares(dp, redis_rate_limit)
-    dp.include_router(root_router)
+    redis_fsm, redis_rate_limit, bot, dp = build_bot_and_dispatcher()
 
     app = build_app(
         bot=bot,
@@ -204,17 +197,7 @@ async def run_webhook_mode() -> None:  # pragma: no cover
 async def run_polling_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
-    redis_fsm = Redis.from_url(settings.redis_url_fsm)
-    redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
-
-    storage = RedisStorage(redis=redis_fsm)
-    bot = Bot(
-        token=settings.bot_token,
-        default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
-    )
-    dp = Dispatcher(storage=storage)
-    setup_middlewares(dp, redis_rate_limit)
-    dp.include_router(root_router)
+    redis_fsm, redis_rate_limit, bot, dp = build_bot_and_dispatcher()
 
     # Локальный служебный веб-сервер: health + yookassa webhook + test webhook.
     # Telegram-апдейты сюда НЕ идут — они получаются через long polling ниже.

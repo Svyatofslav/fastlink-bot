@@ -57,6 +57,18 @@ def format_traffic(used_bytes: int, limit_bytes: int | None) -> str:
     return f"{used_gb:.1f} GB из {limit_gb:.1f} GB"
 
 
+def format_data_limit(limit_bytes: int) -> str:
+    """Форматирует итоговый объём трафика без привязки к расходу.
+
+    format_data_limit(0) -> "безлимит"
+    format_data_limit(150_000_000_000) -> "139.7 GB"
+    """
+    if not limit_bytes:
+        return "безлимит"
+    limit_gb = limit_bytes / (1024**3)
+    return f"{limit_gb:.1f} GB"
+
+
 def format_date(dt: datetime | None) -> str:
     """Форматирует дату в формате ДД.ММ.ГГГГ.
 

@@ -1,26 +1,11 @@
 from __future__ import annotations
 
-import logging
-import sys
-
 import structlog
 from arq.worker import run_worker as arq_run_worker
 
 from config import get_deploy_commit_short, settings
+from logging_setup import configure_logging
 from tasks.worker_settings import WorkerSettings
-
-
-def configure_logging() -> None:
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stdout,
-    )
-    structlog.configure(
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, settings.log_level.upper(), logging.INFO)
-        ),
-    )
 
 
 def main() -> None:  # pragma: no cover
