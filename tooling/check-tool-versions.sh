@@ -11,6 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODEJS_INSTALL_SCRIPT="${SCRIPT_DIR}/install-nodejs.sh"
 GITLEAKS_INSTALL_SCRIPT="${SCRIPT_DIR}/install-gitleaks.sh"
+HADOLINT_INSTALL_SCRIPT="${SCRIPT_DIR}/install-hadolint.sh"
 
 fail=0
 
@@ -39,21 +40,25 @@ require_tool node
 require_tool npm
 require_tool jscpd
 require_tool gitleaks
+require_tool hadolint
 
 NODE_EXPECTED="$(extract_pinned_version NODE_VERSION "$NODEJS_INSTALL_SCRIPT")"
 NPM_EXPECTED="$(extract_pinned_version NPM_VERSION "$NODEJS_INSTALL_SCRIPT")"
 JSCPD_EXPECTED="$(extract_pinned_version JSCPD_VERSION "$NODEJS_INSTALL_SCRIPT")"
 GITLEAKS_EXPECTED="$(extract_pinned_version GITLEAKS_VERSION "$GITLEAKS_INSTALL_SCRIPT")"
+HADOLINT_EXPECTED="$(extract_pinned_version HADOLINT_VERSION "$HADOLINT_INSTALL_SCRIPT")"
 
 NODE_ACTUAL="$(node --version | sed 's/^v//')"
 NPM_ACTUAL="$(npm --version)"
 JSCPD_ACTUAL="$(jscpd --version | grep -oP '\d+\.\d+\.\d+' | head -n1)"
 GITLEAKS_ACTUAL="$(gitleaks version | grep -oP '\d+\.\d+\.\d+' | head -n1)"
+HADOLINT_ACTUAL="$(hadolint --version | grep -oP '\d+\.\d+\.\d+' | head -n1)"
 
 check_version "node" "$NODE_EXPECTED" "$NODE_ACTUAL"
 check_version "npm" "$NPM_EXPECTED" "$NPM_ACTUAL"
 check_version "jscpd" "$JSCPD_EXPECTED" "$JSCPD_ACTUAL"
 check_version "gitleaks" "$GITLEAKS_EXPECTED" "$GITLEAKS_ACTUAL"
+check_version "hadolint" "$HADOLINT_EXPECTED" "$HADOLINT_ACTUAL"
 
 if [[ "$fail" -eq 1 ]]; then
     echo "" >&2
@@ -63,4 +68,4 @@ if [[ "$fail" -eq 1 ]]; then
     exit 1
 fi
 
-echo "Tool versions OK: node ${NODE_ACTUAL}, npm ${NPM_ACTUAL}, jscpd ${JSCPD_ACTUAL}, gitleaks ${GITLEAKS_ACTUAL}"
+echo "Tool versions OK: node ${NODE_ACTUAL}, npm ${NPM_ACTUAL}, jscpd ${JSCPD_ACTUAL}, gitleaks ${GITLEAKS_ACTUAL}, hadolint ${HADOLINT_ACTUAL}"

@@ -22,6 +22,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./logs:/app/logs
+      - ./deploy/reports/scheduled-check:/app/deploy/reports/scheduled-check
 
   worker:
     image: ${FASTLINK_IMAGE}
