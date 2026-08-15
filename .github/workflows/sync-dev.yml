@@ -8,23 +8,34 @@ permissions:
   contents: write
 
 jobs:
-  fast-forward-dev:
+  sync-dev:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
+      - name: Checkout dev with full history
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: main
+          ref: dev
 
-      - name: Fast-forward dev to main (no new commit)
+      - name: Configure git identity
         run: |
-          git fetch origin dev
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git merge-base --is-ancestor origin/dev origin/main; then
-            echo "dev is an ancestor of main - fast-forwarding dev to main HEAD."
-            git push origin main:dev
+      - name: Sync dev with main
+        run: |
+          git fetch origin main
+
+          if git merge-base --is-ancestor HEAD origin/main; then
+            echo "dev has no unique commits - fast-forwarding to main (no new commit)."
+            git merge --ff-only origin/main
           else
-            echo "::error::dev has commits that are not in main (diverged). Refusing to overwrite - resolve manually with a merge/PR into main first."
-            exit 1
+            echo "dev has diverged from main - merging main into dev with a merge commit."
+            if ! git merge --no-edit origin/main; then
+              echo "::error::Merge conflict between dev and main. Resolve manually via a PR (dev already has a commit that touches the same lines dependabot changed)."
+              git merge --abort
+              exit 1
+            fi
           fi
+
+          git push origin HEAD:dev
