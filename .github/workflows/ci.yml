@@ -144,6 +144,9 @@ jobs:
       - name: Install Node.js and jscpd
         run: bash tooling/install-nodejs.sh
 
+      - name: Install hadolint
+        run: bash tooling/install-hadolint.sh
+
       - name: Run Alembic migrations
         run: alembic upgrade head
 
@@ -171,3 +174,20 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t fastlink-bot-ci .
+
+      - name: Scan image with Trivy (blocking)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: fastlink-bot-ci
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "1"
+          trivyignores: tooling/.trivyignore
+
+      - name: Scan image with Trivy (report LOW/UNKNOWN, non-blocking)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: fastlink-bot-ci
+          severity: LOW,UNKNOWN
+          exit-code: "0"
+          trivyignores: tooling/.trivyignore

@@ -1,4 +1,4 @@
-.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix duplication migrations-check migrations-check-server test test-docker check check-server
+.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix dockerfile-lint duplication migrations-check migrations-check-server security-image test test-docker check check-server
 
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 LINT_IMPORTS := $(if $(wildcard .venv/bin/lint-imports),.venv/bin/lint-imports,lint-imports)
@@ -64,6 +64,9 @@ sql-lint:
 sql-fix:
 	$(PYTHON) -m sqlfluff fix database/sql --config tooling/.sqlfluff
 
+dockerfile-lint:
+	hadolint --config tooling/.hadolint.yaml Dockerfile
+
 duplication:
 	jscpd --config tooling/.jscpd.json .
 
@@ -72,6 +75,10 @@ migrations-check:
 
 migrations-check-server:
 	docker compose run --rm --user root bot bash -lc 'set -o pipefail; /opt/venv/bin/python -m alembic check 2>&1 | grep -v "^INFO"'
+
+security-image:
+	trivy image --severity MEDIUM,HIGH,CRITICAL --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
+	trivy image --severity LOW,UNKNOWN --exit-code 0 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
 
 test:
 	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
@@ -84,6 +91,6 @@ test-docker:
 	  -v "$(CURDIR)/tests/reports:/app/tests/reports" \
 	  bot bash -lc "pip install -r requirements-dev.txt --quiet && python -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70"
 
-check: install-hooks lint typecheck security secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint duplication migrations-check test
+check: install-hooks lint typecheck security secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
 
-check-server: lint typecheck security secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint duplication migrations-check-server test-docker
+check-server: lint typecheck security secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker

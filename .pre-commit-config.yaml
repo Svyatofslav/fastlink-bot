@@ -105,8 +105,16 @@ repos:
   - repo: local
     hooks:
       - id: check-tool-versions
-        name: check pinned tool versions (node/npm/jscpd/gitleaks)
+        name: check pinned tool versions (node/npm/jscpd/gitleaks/hadolint)
         entry: bash tooling/check-tool-versions.sh
+        language: system
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: hadolint
+        name: hadolint (Dockerfile lint)
+        entry: hadolint --config tooling/.hadolint.yaml Dockerfile
         language: system
         pass_filenames: false
 

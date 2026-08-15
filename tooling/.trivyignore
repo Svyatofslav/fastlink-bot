@@ -1,0 +1,5 @@
+# Trivy vulnerability ignore list.
+# Add CVE IDs here only with a comment explaining why the risk is accepted
+# (e.g. no available fix, false positive, not exploitable in our context).
+# Example:
+# CVE-2024-XXXXX  # accepted: fix not yet released upstream, low exploitability here

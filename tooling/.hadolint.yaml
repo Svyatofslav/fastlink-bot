@@ -1,0 +1,13 @@
+ignored:
+  # DL3008: Pin versions in apt-get install.
+  # Debian slim base images rotate package versions on every mirror refresh;
+  # hard-pinning apt package versions here would make the build brittle
+  # (old versions disappear from the mirror over time).
+  - DL3008
+  # DL3013: Pin versions in pip install.
+  # Applies here only to `pip install --upgrade pip setuptools wheel`,
+  # which intentionally always wants the latest packaging tooling.
+  - DL3013
+
+trustedRegistries:
+  - docker.io

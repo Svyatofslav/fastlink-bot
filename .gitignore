@@ -67,3 +67,7 @@ tests/reports/*
 
 # Deploy runtime state
 deploy/state/
+
+# Server checkout
+deploy/reports/scheduled-check/*
+!deploy/reports/scheduled-check/.gitkeep
