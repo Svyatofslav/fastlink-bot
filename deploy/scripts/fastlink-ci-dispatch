@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WRAPPER="sudo /usr/local/bin/fastlink-ci"
+APP_DIR="/opt/fastlink-bot"
+raw="${SSH_ORIGINAL_COMMAND:-}"
+
+deny() {
+  echo "ERROR: command rejected: $1" >&2
+  exit 1
+}
+
+[[ -n "$raw" ]] || deny "empty command"
+
+read -r -a parts <<< "$raw"
+
+is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+is_short_sha() { [[ "$1" =~ ^[0-9a-f]{7,40}$ ]]; }
+is_source() { [[ "$1" == "manual" || "$1" == "push-main" ]]; }
+is_env_path() { [[ "$1" == "$APP_DIR/.env.new" || "$1" == "$APP_DIR/.env.ci.test" ]]; }
+is_image_ref() { [[ "$1" =~ ^ghcr\.io/svyatofslav/fastlink-bot@sha256:[a-f0-9]{64}$ ]]; }
+
+case "${parts[0]:-}" in
+  preflight|sync-ops-tooling|update-venv|update-gitleaks|update-nodejs|update-hadolint|update-trivy|compose-up|healthcheck|logs|cleanup-images)
+    [[ "${#parts[@]}" -eq 1 ]] || deny "unexpected arguments"
+    exec $WRAPPER "${parts[0]}"
+    ;;
+  upload-env|validate-env|deploy-env|cleanup-env)
+    [[ "${#parts[@]}" -eq 2 ]] || deny "wrong arg count"
+    is_env_path "${parts[1]}" || deny "path not allowed"
+    exec $WRAPPER "${parts[0]}" "${parts[1]}"
+    ;;
+  sync-git)
+    [[ "${#parts[@]}" -eq 3 ]] || deny "wrong arg count"
+    is_sha "${parts[1]}" || deny "bad sha"
+    is_short_sha "${parts[2]}" || deny "bad short sha"
+    exec $WRAPPER sync-git "${parts[1]}" "${parts[2]}"
+    ;;
+  set-image)
+    [[ "${#parts[@]}" -eq 2 ]] || deny "wrong arg count"
+    is_image_ref "${parts[1]}" || deny "bad image ref"
+    exec $WRAPPER set-image "${parts[1]}"
+    ;;
+  record-success)
+    [[ "${#parts[@]}" -eq 3 ]] || deny "wrong arg count"
+    is_sha "${parts[1]}" || deny "bad sha"
+    is_source "${parts[2]}" || deny "bad source"
+    exec $WRAPPER record-success "${parts[1]}" "${parts[2]}"
+    ;;
+  rollback)
+    [[ "${#parts[@]}" -eq 2 ]] || deny "wrong arg count"
+    is_source "${parts[1]}" || deny "bad source"
+    exec $WRAPPER rollback "${parts[1]}"
+    ;;
+  summary)
+    [[ "${#parts[@]}" -eq 2 ]] || deny "wrong arg count"
+    is_sha "${parts[1]}" || deny "bad sha"
+    exec $WRAPPER summary "${parts[1]}"
+    ;;
+  *)
+    deny "unknown subcommand: ${parts[0]:-<empty>}"
+    ;;
+esac

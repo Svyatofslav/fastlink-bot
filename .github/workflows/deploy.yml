@@ -238,6 +238,14 @@ jobs:
           COMMIT_SHORT="$(git rev-parse --short HEAD)"
           ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" sync-git "$COMMIT_SHA" "$COMMIT_SHORT"
 
+      - name: Sync ops tooling scripts to server
+        if: steps.mode.outputs.dry_run == 'false'
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh $SSH_OPTS -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" sync-ops-tooling
+
       - name: Update remote Python venv dependencies
         if: steps.mode.outputs.dry_run == 'false'
         timeout-minutes: 6

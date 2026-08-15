@@ -1,0 +1,13 @@
+# deploy/cron/fastlink-check-server.cron
+#
+# Ежедневная server-side проверка FastLink (fastlink-ci scheduled-check),
+# запускается напрямую, минуя fastlink-ci-dispatch (тот предназначен только
+# для forced-command SSH из GitHub Actions деплоя).
+#
+# Установка на сервере:
+#   sudo cp deploy/cron/fastlink-check-server.cron /etc/cron.d/fastlink-check-server
+#   sudo chmod 644 /etc/cron.d/fastlink-check-server
+#   sudo systemctl restart cron
+#
+# Формат /etc/cron.d/: минуты часы день месяц день_недели ПОЛЬЗОВАТЕЛЬ команда
+0 5 * * * root /usr/local/bin/fastlink-ci scheduled-check >/dev/null 2>&1
