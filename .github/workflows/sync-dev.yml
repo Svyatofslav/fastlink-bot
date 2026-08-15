@@ -1,0 +1,30 @@
+name: Sync dev with main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fast-forward-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Fast-forward dev to main (no new commit)
+        run: |
+          git fetch origin dev
+
+          if git merge-base --is-ancestor origin/dev origin/main; then
+            echo "dev is an ancestor of main - fast-forwarding dev to main HEAD."
+            git push origin main:dev
+          else
+            echo "::error::dev has commits that are not in main (diverged). Refusing to overwrite - resolve manually with a merge/PR into main first."
+            exit 1
+          fi
