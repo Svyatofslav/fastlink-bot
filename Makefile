@@ -71,7 +71,7 @@ migrations-check:
 	@bash -c 'set -o pipefail; $(PYTHON) -m alembic check 2>&1 | grep -v "^INFO"'
 
 migrations-check-server:
-	docker compose run --rm --user root bot bash -lc 'set -o pipefail; alembic check 2>&1 | grep -v "^INFO"'
+	docker compose run --rm --user root bot bash -lc 'set -o pipefail; /opt/venv/bin/python -m alembic check 2>&1 | grep -v "^INFO"'
 
 test:
 	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
