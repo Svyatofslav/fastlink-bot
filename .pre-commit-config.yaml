@@ -31,11 +31,11 @@ repos:
           - pydantic-settings==2.15.0
           - aiogram==3.30.0
           - aiohttp==3.14.3
-          - sqlalchemy==2.0.51
+          - sqlalchemy==2.0.52
           - asyncpg==0.31.0
           - alembic==1.19.1
           - httpx==0.28.1
-          - redis==5.2.1
+          - redis==5.3.1
           - arq==0.28.0
           - qrcode==8.2
           - pillow==12.3.0
