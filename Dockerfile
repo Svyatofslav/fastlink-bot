@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     libpq-dev \
@@ -16,7 +16,8 @@ COPY requirements.txt requirements-dev.txt ./
 
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
-    /opt/venv/bin/pip install -r requirements.txt
+    /opt/venv/bin/pip install -r requirements.txt && \
+    rm -rf /root/.cache/pip
 
 FROM python:3.14-slim AS runtime
 
@@ -26,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
     tzdata \
