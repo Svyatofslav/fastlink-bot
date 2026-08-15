@@ -1,0 +1,50 @@
+rules:
+  - id: fastlink-no-raw-webhook-payload-logging
+    languages: [python]
+    severity: ERROR
+    message: >
+      Не передавай сырой webhook payload целиком в logger.* — в нём могут быть
+      email, персональные данные плательщика от YooKassa и т.п. Логируй только
+      конкретные безопасные поля (event_id, provider_payment_id, amount,
+      currency), как уже сделано в handle_payment_succeeded.
+    patterns:
+      - pattern-either:
+          - pattern: logger.info(..., payload=$PAYLOAD, ...)
+          - pattern: logger.warning(..., payload=$PAYLOAD, ...)
+          - pattern: logger.error(..., payload=$PAYLOAD, ...)
+          - pattern: logger.exception(..., payload=$PAYLOAD, ...)
+          - pattern: logger.debug(..., payload=$PAYLOAD, ...)
+          - pattern: logger.info(..., raw_payload=$PAYLOAD, ...)
+          - pattern: logger.warning(..., raw_payload=$PAYLOAD, ...)
+          - pattern: logger.error(..., raw_payload=$PAYLOAD, ...)
+          - pattern: logger.exception(..., raw_payload=$PAYLOAD, ...)
+    paths:
+      include:
+        - "**/webhooks/"
+        - "**/scheduler/"
+        - "**/services/"
+
+  - id: fastlink-money-field-must-be-int
+    languages: [python]
+    severity: ERROR
+    message: >
+      Денежные суммы в FastLink хранятся только как int (минимальные единицы —
+      копейки), никогда как float/Decimal — иначе риск ошибок округления с
+      плавающей точкой в платежах/возвратах. Decimal допустим только как
+      временная величина внутри utils/format.py при парсинге пользовательского
+      ввода, не как тип хранения/параметра.
+    patterns:
+      - pattern-either:
+          - pattern: "$FIELD: float = ..."
+          - pattern: "$FIELD: Decimal = ..."
+      - metavariable-regex:
+          metavariable: $FIELD
+          regex: (?i)^.*(amount|price|sum|refund).*$
+    paths:
+      include:
+        - "**/database/models.py"
+        - "**/schemas/"
+        - "**/services/"
+        - "**/domain/"
+      exclude:
+        - "**/utils/format.py"

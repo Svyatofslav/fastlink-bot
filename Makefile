@@ -1,7 +1,9 @@
-.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix dockerfile-lint duplication migrations-check migrations-check-server security-image test test-docker check check-server
+.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security semgrep license-check audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix dockerfile-lint duplication migrations-check migrations-check-server security-image test test-docker check check-server
 
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 LINT_IMPORTS := $(if $(wildcard .venv/bin/lint-imports),.venv/bin/lint-imports,lint-imports)
+SEMGREP := $(if $(wildcard .venv/bin/semgrep),.venv/bin/semgrep,semgrep)
+PIP_LICENSES := $(if $(wildcard .venv/bin/pip-licenses),.venv/bin/pip-licenses,pip-licenses)
 
 install-hooks:
 	pre-commit install
@@ -24,6 +26,12 @@ typecheck:
 
 security:
 	$(PYTHON) -m bandit -c tooling/bandit.yaml -r .
+
+semgrep:
+	$(SEMGREP) --config tooling/semgrep.yml --error .
+
+license-check:
+	$(PIP_LICENSES) --fail-on="GNU Affero General Public License v3;GNU Affero General Public License v3 or later (AGPLv3+);GNU General Public License (GPL);GNU General Public License v2 (GPLv2);GNU General Public License v2 or later (GPLv2+);GNU General Public License v3 (GPLv3);GNU General Public License v3 or later (GPLv3+)"
 
 audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
@@ -91,6 +99,6 @@ test-docker:
 	  -v "$(CURDIR)/tests/reports:/app/tests/reports" \
 	  bot bash -lc "pip install -r requirements-dev.txt --quiet && python -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70"
 
-check: install-hooks lint typecheck security secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
+check: install-hooks lint typecheck security semgrep license-check secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
 
-check-server: lint typecheck security secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker
+check-server: lint typecheck security semgrep license-check secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker
