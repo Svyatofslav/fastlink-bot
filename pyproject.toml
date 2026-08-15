@@ -29,6 +29,10 @@ fail_under = 70
 show_missing = true
 skip_covered = false
 
+[tool.pytest.ini_options]
+timeout = 30
+timeout_method = "thread"
+
 [tool.mypy]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]

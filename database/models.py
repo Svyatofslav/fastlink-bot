@@ -15,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     desc,
     func,
+    text,
 )
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -511,7 +512,17 @@ class Refund(TimestampMixin, Base):
         lazy="selectin",
     )
 
-    __table_args__ = (Index("ix_refunds_status", "status"),)
+    __table_args__ = (
+        Index("ix_refunds_status", "status"),
+        Index(
+            "uq_refunds_active_per_request",
+            "refund_request_id",
+            unique=True,
+            postgresql_where=text(
+                "status <> 'CANCELED' AND refund_request_id IS NOT NULL"
+            ),
+        ),
+    )
 
 
 class SupportTicket(TimestampMixin, Base):
