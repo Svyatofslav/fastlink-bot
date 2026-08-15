@@ -6,7 +6,7 @@ NPM_VERSION="12.0.2"
 JSCPD_VERSION="4.2.5"
 NODE_DIST="node-v${NODE_VERSION}-linux-x64"
 
-curl -sSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/nodejs.tar.xz
+curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/nodejs.tar.xz
 sudo rm -rf "/usr/local/lib/nodejs/${NODE_DIST}"
 sudo mkdir -p /usr/local/lib/nodejs
 sudo tar -xJf /tmp/nodejs.tar.xz -C /usr/local/lib/nodejs
