@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tooling/install-trivy.sh
 set -euo pipefail
-TRIVY_VERSION="0.58.1"
-curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+TRIVY_VERSION="0.69.3"
+curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
 tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
 sudo mv /tmp/trivy /usr/local/bin/trivy
 sudo chmod +x /usr/local/bin/trivy
