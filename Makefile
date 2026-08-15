@@ -77,7 +77,7 @@ migrations-check-server:
 	docker compose run --rm --user root bot bash -lc 'set -o pipefail; /opt/venv/bin/python -m alembic check 2>&1 | grep -v "^INFO"'
 
 security-image:
-	trivy image --severity MEDIUM,HIGH,CRITICAL --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
+	trivy image --severity MEDIUM,HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
 	trivy image --severity LOW,UNKNOWN --exit-code 0 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
 
 test:

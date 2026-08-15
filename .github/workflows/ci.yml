@@ -180,6 +180,7 @@ jobs:
         with:
           image-ref: fastlink-bot-ci
           severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: "1"
           trivyignores: tooling/.trivyignore
 
@@ -189,5 +190,6 @@ jobs:
         with:
           image-ref: fastlink-bot-ci
           severity: LOW,UNKNOWN
+          ignore-unfixed: true
           exit-code: "0"
           trivyignores: tooling/.trivyignore

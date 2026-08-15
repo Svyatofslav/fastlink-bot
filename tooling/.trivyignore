@@ -1,5 +1,7 @@
-# Trivy vulnerability ignore list.
-# Add CVE IDs here only with a comment explaining why the risk is accepted
-# (e.g. no available fix, false positive, not exploitable in our context).
-# Example:
-# CVE-2024-XXXXX  # accepted: fix not yet released upstream, low exploitability here
+# tooling/.trivyignore
+
+# GHSA-6v7p-g79w-8964 (msgpack <1.2.1): вендоренная копия внутри pip/_vendor,
+# используется только внутренним HTTP-кэшем pip при `pip install`, не достижима
+# из runtime бота. Фикс подтянется автоматически с выходом стабильного pip 26.3.
+# Дата ревью: 2026-08-15. Пересмотреть при обновлении pip.
+GHSA-6v7p-g79w-8964
