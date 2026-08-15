@@ -1,0 +1,691 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="/opt/fastlink-bot"
+PYTHON="$APP_DIR/.venv/bin/python"
+COMPOSE="/usr/bin/docker compose"
+STATE_DIR="$APP_DIR/deploy/state"
+DEPLOY_STATE="$STATE_DIR/.deploy-state"
+REPORTS_DIR="$APP_DIR/deploy/reports"
+
+log() {
+  printf '%s\n' "$1"
+}
+
+update_deploy_state() {
+  local tmp
+  tmp="$(mktemp "${STATE_DIR}/.deploy-state.XXXXXX")"
+
+  declare -A state
+  if [[ -f "$DEPLOY_STATE" ]]; then
+    while IFS='=' read -r k v; do
+      [[ -n "$k" ]] && state["$k"]="$v"
+    done < "$DEPLOY_STATE"
+  fi
+
+  local kv k v
+  for kv in "$@"; do
+    k="${kv%%=*}"
+    v="${kv#*=}"
+    state["$k"]="$v"
+  done
+
+  state["timestamp"]="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  {
+    for k in commit_sha commit_short image_ref source timestamp; do
+      printf '%s=%s\n' "$k" "${state[$k]:-}"
+    done
+  } > "$tmp"
+
+  mv -f "$tmp" "$DEPLOY_STATE"
+}
+
+require_args() {
+  local expected="$1"
+  local actual="$2"
+  local usage="$3"
+  if [[ "$actual" -ne "$expected" ]]; then
+    echo "ERROR: usage: $usage" >&2
+    exit 1
+  fi
+}
+
+ensure_app_dir() {
+  test -d "$APP_DIR"
+  cd "$APP_DIR"
+  mkdir -p "$STATE_DIR"
+}
+
+allowed_env_target() {
+  case "$1" in
+    "$APP_DIR/.env.new"|"$APP_DIR/.env.ci.test")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_valid_image_ref() {
+  [[ "$1" =~ ^ghcr\.io/svyatofslav/fastlink-bot@sha256:[a-f0-9]{64}$ ]]
+}
+
+cmd_preflight() {
+  ensure_app_dir
+  log "REMOTE_HOST=$(hostname)"
+  log "REMOTE_USER=$(whoami)"
+  log "REMOTE_STATUS_START"
+  git status --short || true
+  log "REMOTE_STATUS_END"
+  log "REMOTE_BRANCH=$(git branch --show-current)"
+  log "REMOTE_HEAD=$(git rev-parse HEAD)"
+  log "REMOTE_HEAD_SHORT=$(git rev-parse --short HEAD)"
+  if [[ -f "$STATE_DIR/.deploy-commit" ]]; then
+    log "REMOTE_LAST_DEPLOY_COMMIT=$(cat "$STATE_DIR/.deploy-commit")"
+  else
+    log "REMOTE_LAST_DEPLOY_COMMIT=none"
+  fi
+  if [[ -f "$STATE_DIR/.deploy-commit-short" ]]; then
+    log "REMOTE_LAST_DEPLOY_COMMIT_SHORT=$(cat "$STATE_DIR/.deploy-commit-short")"
+  fi
+  log "REMOTE_ORIGIN_MAIN=$(git rev-parse origin/main)"
+  test -f .env
+  log "REMOTE_ENV_PRESENT=yes"
+
+  if [[ -f "$DEPLOY_STATE" ]]; then
+    log "REMOTE_DEPLOY_STATE_START"
+    cat "$DEPLOY_STATE"
+    log "REMOTE_DEPLOY_STATE_END"
+  else
+    log "REMOTE_DEPLOY_STATE=none"
+  fi
+  /usr/bin/docker --version
+  $COMPOSE version
+  $COMPOSE config --services
+}
+
+cmd_upload_env() {
+  require_args 1 "$#" "upload-env <target_path>"
+  local target_path="$1"
+
+  ensure_app_dir
+
+  if ! allowed_env_target "$target_path"; then
+    echo "ERROR: target path is not allowed: $target_path" >&2
+    exit 1
+  fi
+
+  local tmp_file
+  tmp_file="$(mktemp "${APP_DIR}/.env.upload.XXXXXX")"
+  trap 'rm -f "$tmp_file"' EXIT
+
+  cat > "$tmp_file"
+  test -s "$tmp_file"
+
+  mv -f "$tmp_file" "$target_path"
+  trap - EXIT
+
+  log "ENV_UPLOAD_DONE=$target_path"
+}
+
+cmd_validate_env() {
+  require_args 1 "$#" "validate-env <env_file_path>"
+  local env_file="$1"
+
+  ensure_app_dir
+  test -f "$env_file"
+  log "ENV_TEST_FILE_PRESENT=yes"
+  grep -E '^(APP_ENV|USE_WEBHOOK|POSTGRES_DB|POSTGRES_USER|REDIS_HOST|MARZBAN_USERNAME|METRICS_URL)=' "$env_file"
+}
+
+cmd_deploy_env() {
+  require_args 1 "$#" "deploy-env <env_file_path>"
+  local env_file="$1"
+
+  ensure_app_dir
+  test -f "$env_file"
+
+  if [[ -f .env ]]; then
+    cp -f .env .env.previous
+    log "ENV_BACKUP_CREATED=yes"
+  else
+    log "ENV_BACKUP_SKIPPED=no_previous_env"
+  fi
+
+  cp -f "$env_file" .env
+  rm -f "$env_file"
+  log "ENV_DEPLOYED=yes"
+}
+
+cmd_cleanup_env() {
+  require_args 1 "$#" "cleanup-env <env_file_path>"
+  local env_file="$1"
+
+  ensure_app_dir
+
+  if ! allowed_env_target "$env_file"; then
+    echo "ERROR: cleanup target is not allowed: $env_file" >&2
+    exit 1
+  fi
+
+  rm -f "$env_file"
+  log "ENV_TEST_FILE_REMOVED=yes"
+}
+
+cmd_set_image() {
+  require_args 1 "$#" "set-image <image_ref>"
+  local image_ref="$1"
+
+  ensure_app_dir
+
+  if ! is_valid_image_ref "$image_ref"; then
+    echo "ERROR: invalid image ref: $image_ref" >&2
+    exit 1
+  fi
+
+  test -f .env
+
+  if grep -q '^FASTLINK_IMAGE=' .env; then
+    sed -i "s#^FASTLINK_IMAGE=.*#FASTLINK_IMAGE=$image_ref#" .env
+  else
+    printf '\nFASTLINK_IMAGE=%s\n' "$image_ref" >> .env
+  fi
+
+  update_deploy_state "image_ref=$image_ref"
+  log "DEPLOY_IMAGE_SET=$image_ref"
+}
+
+cmd_sync_git() {
+  require_args 2 "$#" "sync-git <commit_sha> <commit_short>"
+  local commit_sha="$1"
+  local commit_short="$2"
+
+  ensure_app_dir
+
+  if [[ -f "$STATE_DIR/.deploy-commit" ]]; then
+    cp -f "$STATE_DIR/.deploy-commit" "$STATE_DIR/.deploy-commit-previous"
+  fi
+  if [[ -f "$STATE_DIR/.deploy-commit-short" ]]; then
+    cp -f "$STATE_DIR/.deploy-commit-short" "$STATE_DIR/.deploy-commit-short-previous"
+  fi
+  if [[ -f "$DEPLOY_STATE" ]]; then
+    cp -f "$DEPLOY_STATE" "$STATE_DIR/.deploy-state-previous"
+  fi
+
+  git fetch origin main
+  git reset --hard "$commit_sha"
+  git clean -fd
+
+  printf '%s\n' "$commit_sha" > "$STATE_DIR/.deploy-commit"
+  printf '%s\n' "$commit_short" > "$STATE_DIR/.deploy-commit-short"
+  update_deploy_state "commit_sha=$commit_sha" "commit_short=$commit_short"
+  log "REMOTE_GIT_SYNCED=yes"
+}
+
+cmd_sync_ops_tooling() {
+  ensure_app_dir
+
+  local src_ci="$APP_DIR/deploy/scripts/fastlink-ci"
+  local src_dispatch="$APP_DIR/deploy/scripts/fastlink-ci-dispatch"
+
+  test -f "$src_ci"
+  test -f "$src_dispatch"
+
+  install -m 755 -o root -g root "$src_ci" /usr/local/bin/fastlink-ci
+  install -m 755 -o root -g root "$src_dispatch" /usr/local/bin/fastlink-ci-dispatch
+  log "OPS_SCRIPTS_INSTALLED=yes"
+
+  local cron_src="$APP_DIR/deploy/cron/fastlink-check-server.cron"
+  local cron_dst="/etc/cron.d/fastlink-check-server"
+  if [[ -f "$cron_src" ]]; then
+    if [[ -f "$cron_dst" ]] && cmp -s "$cron_src" "$cron_dst"; then
+      log "CRON_ALREADY_CURRENT=yes"
+    else
+      install -m 644 -o root -g root "$cron_src" "$cron_dst"
+      log "CRON_INSTALLED=yes"
+    fi
+  else
+    log "CRON_SOURCE_MISSING=$cron_src"
+  fi
+
+  systemctl enable cron >/dev/null 2>&1 || true
+  if ! systemctl is-active --quiet cron; then
+    systemctl start cron
+  fi
+  log "CRON_SERVICE_ACTIVE=$(systemctl is-active cron)"
+}
+
+cmd_update_venv() {
+  ensure_app_dir
+
+  if [[ ! -d .venv ]]; then
+    echo "ERROR: remote .venv not found in $APP_DIR" >&2
+    exit 1
+  fi
+
+  "$PYTHON" -m pip install --upgrade pip
+  "$PYTHON" -m pip install -r requirements-dev.txt
+
+  log "REMOTE_VENV_DEPS_UPDATED=yes"
+  "$PYTHON" --version
+  "$PYTHON" -m pip --version
+}
+
+cmd_update_gitleaks() {
+  ensure_app_dir
+  local script="$APP_DIR/tooling/install-gitleaks.sh"
+  test -f "$script"
+
+  local target_version
+  target_version="$(grep -oP '^GITLEAKS_VERSION="\K[0-9.]+(?=")' "$script")"
+  test -n "$target_version"
+
+  local current_version=""
+  if command -v gitleaks >/dev/null 2>&1; then
+    current_version="$(gitleaks version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+  fi
+
+  if [[ "$current_version" == "$target_version" ]]; then
+    log "GITLEAKS_ALREADY_CURRENT=$target_version"
+    gitleaks version
+    return 0
+  fi
+
+  bash "$script"
+  log "GITLEAKS_UPDATED_TO=$target_version"
+}
+
+cmd_update_nodejs() {
+  ensure_app_dir
+  local script="$APP_DIR/tooling/install-nodejs.sh"
+  test -f "$script"
+
+  local target_version
+  target_version="$(grep -oP '^NODE_VERSION="\K[0-9.]+(?=")' "$script")"
+  test -n "$target_version"
+
+  local current_version=""
+  if command -v node >/dev/null 2>&1; then
+    current_version="$(node --version 2>/dev/null | sed 's/^v//')"
+  fi
+
+  if [[ "$current_version" == "$target_version" ]]; then
+    log "NODEJS_ALREADY_CURRENT=$target_version"
+    node --version
+    npm --version
+    return 0
+  fi
+
+  bash "$script"
+  log "NODEJS_UPDATED_TO=$target_version"
+}
+
+cmd_update_hadolint() {
+  ensure_app_dir
+  local script="$APP_DIR/tooling/install-hadolint.sh"
+  test -f "$script"
+
+  local target_version
+  target_version="$(grep -oP '^HADOLINT_VERSION="\K[0-9.]+(?=")' "$script")"
+  test -n "$target_version"
+
+  local current_version=""
+  if command -v hadolint >/dev/null 2>&1; then
+    current_version="$(hadolint --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+  fi
+
+  if [[ "$current_version" == "$target_version" ]]; then
+    log "HADOLINT_ALREADY_CURRENT=$target_version"
+    hadolint --version
+    return 0
+  fi
+
+  bash "$script"
+  log "HADOLINT_UPDATED_TO=$target_version"
+}
+
+cmd_update_trivy() {
+  ensure_app_dir
+  local script="$APP_DIR/tooling/install-trivy.sh"
+  test -f "$script"
+
+  local target_version
+  target_version="$(grep -oP '^TRIVY_VERSION="\K[0-9.]+(?=")' "$script")"
+  test -n "$target_version"
+
+  local current_version=""
+  if command -v trivy >/dev/null 2>&1; then
+    current_version="$(trivy --version 2>/dev/null | grep -oP 'Version:\s*\K[0-9.]+' | head -n1 || true)"
+  fi
+
+  if [[ "$current_version" == "$target_version" ]]; then
+    log "TRIVY_ALREADY_CURRENT=$target_version"
+    trivy --version
+    return 0
+  fi
+
+  bash "$script"
+  log "TRIVY_UPDATED_TO=$target_version"
+}
+
+cmd_compose_up() {
+  ensure_app_dir
+
+  test -f .env
+  grep -q '^FASTLINK_IMAGE=ghcr\.io/svyatofslav/fastlink-bot@sha256:' .env
+
+  $COMPOSE config -q
+  log "COMPOSE_CONFIG_VALID=yes"
+
+  if ! $COMPOSE pull bot worker postgres redis; then
+    log "WARNING: pull failed, will use existing local images if present"
+    $COMPOSE images
+  fi
+  log "COMPOSE_PULL_DONE=yes"
+
+  $COMPOSE run --rm bot alembic upgrade head
+  log "MIGRATIONS_DONE=yes"
+
+  $COMPOSE up -d --remove-orphans
+  log "COMPOSE_UP_DONE=yes"
+}
+
+cmd_healthcheck() {
+  ensure_app_dir
+
+  rm -f "$STATE_DIR/.healthcheck-status"
+
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if curl -fsS http://127.0.0.1:8080/health | grep -q '"status": "ok"'; then
+      printf '%s\n' 'yes' > "$STATE_DIR/.healthcheck-status"
+      log "Healthcheck attempt $i succeeded"
+      log "HEALTHCHECK_PASSED=yes"
+      return 0
+    fi
+    log "Healthcheck attempt $i failed, waiting 5s..."
+    sleep 5
+  done
+
+  printf '%s\n' 'no' > "$STATE_DIR/.healthcheck-status"
+  log "HEALTHCHECK_FAILED: /health did not return ok after retries"
+  $COMPOSE ps
+  $COMPOSE logs --tail=50 bot
+  $COMPOSE logs --tail=50 worker
+  exit 1
+}
+
+cmd_record_success() {
+  require_args 2 "$#" "record-success <commit_sha> <source>"
+  local commit_sha="$1"
+  local source="$2"
+
+  ensure_app_dir
+  printf '%s|%s|%s|%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$commit_sha" "$source" "success" > "$STATE_DIR/.deploy-last-success"
+  update_deploy_state "commit_sha=$commit_sha" "source=$source"
+  log "DEPLOY_SUCCESS_RECORDED=yes"
+}
+
+cmd_rollback() {
+  require_args 1 "$#" "rollback <source>"
+  local source="$1"
+
+  ensure_app_dir
+
+  local failed_image_ref
+  failed_image_ref="$(grep '^FASTLINK_IMAGE=' .env 2>/dev/null | cut -d= -f2- || true)"
+
+  if [[ ! -f "$STATE_DIR/.deploy-commit-previous" ]]; then
+    log "ROLLBACK_SKIPPED: no previous commit marker found"
+    return 0
+  fi
+
+  local prev_commit
+  prev_commit="$(cat "$STATE_DIR/.deploy-commit-previous")"
+  log "ROLLBACK_TO=$prev_commit"
+
+  if [[ -f .env.previous ]]; then
+    cp -f .env.previous .env
+    log "ENV_ROLLED_BACK=yes"
+  else
+    log "ENV_ROLLBACK_SKIPPED=no_previous_env"
+  fi
+
+  if ! git fetch origin main; then
+    echo "ERROR: git fetch failed during rollback" >&2
+    exit 1
+  fi
+  if ! git reset --hard "$prev_commit"; then
+    echo "ERROR: git reset failed during rollback" >&2
+    exit 1
+  fi
+  git clean -fd
+
+  if ! $COMPOSE pull bot worker postgres redis; then
+    echo "ERROR: docker compose pull failed during rollback" >&2
+    exit 1
+  fi
+  if ! $COMPOSE up -d --remove-orphans; then
+    echo "ERROR: docker compose up failed during rollback" >&2
+    exit 1
+  fi
+
+  local prev_commit_short
+  prev_commit_short="$(git rev-parse --short "$prev_commit")"
+
+
+  printf '%s\n' "$prev_commit" > "$STATE_DIR/.deploy-commit"
+  printf '%s\n' "$prev_commit_short" > "$STATE_DIR/.deploy-commit-short"
+  printf '%s|%s|%s|%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$prev_commit" "$source" "rollback" > "$STATE_DIR/.deploy-last-failure"
+
+  if [[ -f "$STATE_DIR/.deploy-state-previous" ]]; then
+    cp -f "$STATE_DIR/.deploy-state-previous" "$DEPLOY_STATE"
+    update_deploy_state "commit_sha=$prev_commit" "commit_short=$prev_commit_short" "source=$source-rollback"
+  else
+    update_deploy_state "commit_sha=$prev_commit" "commit_short=$prev_commit_short" "source=$source-rollback" "image_ref="
+  fi
+
+  local restored_image_ref
+  restored_image_ref="$(grep '^FASTLINK_IMAGE=' .env 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -n "$failed_image_ref" ]] && [[ "$failed_image_ref" != "$restored_image_ref" ]]; then
+    docker rmi -f "$failed_image_ref" 2>/dev/null || true
+    log "FAILED_IMAGE_REMOVED=$failed_image_ref"
+  fi
+
+  log "ROLLBACK_DONE=yes"
+}
+
+cmd_logs() {
+  ensure_app_dir
+  log "COMPOSE_PS_START"
+  $COMPOSE ps
+  log "COMPOSE_PS_END"
+
+  log "BOT_LOGS_START"
+  $COMPOSE logs --tail=50 bot
+  log "BOT_LOGS_END"
+
+  log "WORKER_LOGS_START"
+  $COMPOSE logs --tail=50 worker
+  log "WORKER_LOGS_END"
+}
+
+cmd_cleanup_images() {
+  ensure_app_dir
+
+  local repo="ghcr.io/svyatofslav/fastlink-bot"
+  local keep=2
+  local old_ids
+  old_ids="$(docker images "$repo" --format '{{.CreatedAt}}|{{.ID}}' | sort -r | tail -n +$((keep + 1)) | awk -F'|' '{print $2}' | sort -u)"
+
+  if [[ -n "$old_ids" ]]; then
+    echo "$old_ids" | xargs -r docker rmi -f
+    log "OLD_IMAGES_REMOVED=yes"
+  else
+    log "OLD_IMAGES_REMOVED=none"
+  fi
+
+  docker image prune -f
+  log "IMAGE_CLEANUP_DONE=yes"
+}
+
+cmd_summary() {
+  require_args 1 "$#" "summary <runner_commit_sha>"
+  local runner_commit_sha="$1"
+
+  ensure_app_dir
+
+  log "FINAL_SUMMARY_START"
+  log "FINAL_RUNNER_HEAD=$runner_commit_sha"
+  log "FINAL_REMOTE_GIT_HEAD=$(git rev-parse HEAD)"
+  log "FINAL_DEPLOY_MARKER=$(cat "$STATE_DIR/.deploy-commit")"
+
+  if [[ -f "$DEPLOY_STATE" ]]; then
+    log "FINAL_DEPLOY_STATE_START"
+    cat "$DEPLOY_STATE"
+    log "FINAL_DEPLOY_STATE_END"
+  fi
+
+  if [[ -f "$STATE_DIR/.deploy-last-success" ]]; then
+    log "FINAL_LAST_SUCCESS=$(cat "$STATE_DIR/.deploy-last-success")"
+  fi
+  if [[ -f "$STATE_DIR/.deploy-last-failure" ]]; then
+    log "FINAL_LAST_FAILURE=$(cat "$STATE_DIR/.deploy-last-failure")"
+  fi
+
+  if [[ -f "$STATE_DIR/.healthcheck-status" ]] && [[ "$(cat "$STATE_DIR/.healthcheck-status")" == "yes" ]]; then
+    log "FINAL_HEALTHCHECK_PASSED=yes"
+  else
+    log "FINAL_HEALTHCHECK_PASSED=no"
+  fi
+
+  rm -f "$STATE_DIR/.healthcheck-status"
+
+  local final_git_status
+  final_git_status="$(git status --short || true)"
+  if [[ -z "$final_git_status" ]]; then
+    log "FINAL_GIT_DIRTY=no"
+  else
+    log "FINAL_GIT_DIRTY=yes"
+    log "FINAL_GIT_STATUS_START"
+    printf '%s\n' "$final_git_status"
+    log "FINAL_GIT_STATUS_END"
+  fi
+
+  log "FINAL_SUMMARY_END"
+}
+
+cmd_scheduled_check() {
+  ensure_app_dir
+  local history_dir="$REPORTS_DIR/scheduled-check"
+  mkdir -p "$history_dir"
+
+  local start_ts
+  start_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local timestamp
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  local log_file="$history_dir/check-${timestamp}.log"
+
+  {
+    echo "SCHEDULED_CHECK_STARTED=${start_ts}"
+    echo ""
+  } > "$log_file"
+
+  set +e
+  make check-server >> "$log_file" 2>&1
+  local status=$?
+  set -e
+
+  local end_ts
+  end_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  {
+    echo ""
+    echo "SCHEDULED_CHECK_FINISHED=${end_ts}"
+    if [[ "$status" -eq 0 ]]; then
+      echo "SCHEDULED_CHECK_RESULT=PASSED"
+    else
+      echo "SCHEDULED_CHECK_RESULT=FAILED"
+      echo "SCHEDULED_CHECK_EXIT_CODE=${status}"
+    fi
+  } >> "$log_file"
+
+  ls -1t "$history_dir"/check-*.log 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+  log "SCHEDULED_CHECK_LOG=${log_file}"
+  if [[ "$status" -eq 0 ]]; then
+    log "SCHEDULED_CHECK_STATUS=passed"
+  else
+    log "SCHEDULED_CHECK_STATUS=failed"
+  fi
+
+  return "$status"
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  fastlink-ci preflight
+  fastlink-ci upload-env <target_path>
+  fastlink-ci validate-env <env_file_path>
+  fastlink-ci deploy-env <env_file_path>
+  fastlink-ci cleanup-env <env_file_path>
+  fastlink-ci sync-git <commit_sha> <commit_short>
+  fastlink-ci sync-ops-tooling
+  fastlink-ci update-venv
+  fastlink-ci update-gitleaks
+  fastlink-ci update-nodejs
+  fastlink-ci update-hadolint
+  fastlink-ci update-trivy
+  fastlink-ci compose-up
+  fastlink-ci healthcheck
+  fastlink-ci record-success <commit_sha> <source>
+  fastlink-ci rollback <source>
+  fastlink-ci set-image <image_ref>
+  fastlink-ci logs
+  fastlink-ci cleanup-images
+  fastlink-ci summary <runner_commit_sha>
+  fastlink-ci scheduled-check
+EOF
+}
+
+main() {
+  if [[ $# -lt 1 ]]; then
+    usage >&2
+    exit 1
+  fi
+
+  local command="$1"
+  shift
+
+  case "$command" in
+    preflight) cmd_preflight "$@" ;;
+    upload-env) cmd_upload_env "$@" ;;
+    validate-env) cmd_validate_env "$@" ;;
+    deploy-env) cmd_deploy_env "$@" ;;
+    cleanup-env) cmd_cleanup_env "$@" ;;
+    sync-git) cmd_sync_git "$@" ;;
+    sync-ops-tooling) cmd_sync_ops_tooling "$@" ;;
+    update-venv) cmd_update_venv "$@" ;;
+    update-gitleaks) cmd_update_gitleaks "$@" ;;
+    update-nodejs) cmd_update_nodejs "$@" ;;
+    update-hadolint) cmd_update_hadolint "$@" ;;
+    update-trivy) cmd_update_trivy "$@" ;;
+    compose-up) cmd_compose_up "$@" ;;
+    healthcheck) cmd_healthcheck "$@" ;;
+    record-success) cmd_record_success "$@" ;;
+    rollback) cmd_rollback "$@" ;;
+    set-image) cmd_set_image "$@" ;;
+    logs) cmd_logs "$@" ;;
+    cleanup-images) cmd_cleanup_images "$@" ;;
+    summary) cmd_summary "$@" ;;
+    scheduled-check) cmd_scheduled_check "$@" ;;
+    *)
+      echo "ERROR: unknown command: $command" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
