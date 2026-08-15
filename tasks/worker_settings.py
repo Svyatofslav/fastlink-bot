@@ -74,7 +74,7 @@ class WorkerSettings(WorkerSettingsBase):
             minute={5},
         ),
     ]
-    on_startup = startup
-    on_shutdown = shutdown
+    on_startup = staticmethod(startup)
+    on_shutdown = staticmethod(shutdown)
     max_jobs = 10
     job_timeout = 30

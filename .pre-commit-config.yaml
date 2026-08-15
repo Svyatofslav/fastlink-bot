@@ -16,48 +16,48 @@ repos:
       - id: check-toml
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.17
+    rev: v0.16.2
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
+    rev: v2.3.0
     hooks:
       - id: mypy
         additional_dependencies:
-          - pydantic==2.10.1
-          - pydantic-settings==2.10.1
+          - pydantic==2.13.4
+          - pydantic-settings==2.15.0
           - aiogram==3.30.0
           - aiohttp==3.14.3
-          - sqlalchemy==2.0.41
-          - asyncpg==0.30.0
-          - alembic==1.16.2
+          - sqlalchemy==2.0.51
+          - asyncpg==0.31.0
+          - alembic==1.19.1
           - httpx==0.28.1
           - redis==5.2.1
-          - arq==0.26.3
+          - arq==0.28.0
           - qrcode==8.2
           - pillow==12.3.0
-          - structlog==25.4.0
-          - psycopg2-binary==2.9.9
+          - structlog==26.1.0
+          - psycopg2-binary==2.9.12
           - cryptography==50.0.0
-          - argon2-cffi==23.1.0
-          - types-qrcode==8.2.0.20250506
+          - argon2-cffi==25.1.0
+          - types-qrcode==8.2.0.20260518
           - types-redis==4.6.0.20241004
-          - types-psycopg2==2.9.21.20250809
+          - types-psycopg2==2.9.21.20260724
         args: [--config-file=pyproject.toml]
         exclude: ^(alembic/|tests/)
 
   - repo: https://github.com/PyCQA/bandit
-    rev: "1.7.9"
+    rev: "1.9.4"
     hooks:
       - id: bandit
         args: ["-c", "tooling/bandit.yaml", "-r", "."]
         pass_filenames: false
 
   - repo: https://github.com/pypa/pip-audit
-    rev: v2.9.0
+    rev: v2.10.1
     hooks:
       - id: pip-audit
         name: pip-audit (runtime deps)
@@ -73,7 +73,7 @@ repos:
         args: ["--staged", "--config", "tooling/gitleaks.toml", "-v", "--redact"]
 
   - repo: https://github.com/jendrikseipp/vulture
-    rev: v2.14
+    rev: v2.16
     hooks:
       - id: vulture
 
@@ -95,7 +95,7 @@ repos:
         args: ["--max-absolute", "B", "--max-modules", "B", "--max-average", "A", "--exclude", "alembic/*,.venv/*,venv/*,tests/*"]
 
   - repo: https://github.com/sqlfluff/sqlfluff
-    rev: 4.2.2
+    rev: 4.3.0
     hooks:
       - id: sqlfluff-lint
         args: ["--config", "tooling/.sqlfluff"]

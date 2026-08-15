@@ -16,6 +16,9 @@ updates:
       prefix: "chore(deps)"
     labels:
       - "dependencies"
+    ignore:
+      - dependency-name: "redis"
+        versions: [">=6"]
 
   - package-ecosystem: "docker"
     directory: "/"

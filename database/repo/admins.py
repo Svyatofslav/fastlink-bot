@@ -23,7 +23,7 @@ class AdminRepo(BaseRepo[Admin]):
         result = await self.session.execute(
             select(Admin).where(
                 Admin.telegram_id == telegram_id,
-                Admin.is_active == True,  # noqa: E712
+                Admin.is_active == True,
             )
         )
         return result.scalar_one_or_none()
@@ -54,6 +54,6 @@ class AdminRepo(BaseRepo[Admin]):
 
     async def get_all_active(self) -> list[Admin]:
         result = await self.session.execute(
-            select(Admin).where(Admin.is_active == True)  # noqa: E712
+            select(Admin).where(Admin.is_active == True)
         )
         return list(result.scalars().all())
