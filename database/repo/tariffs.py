@@ -11,9 +11,7 @@ class TariffRepo(BaseRepo[Tariff]):
 
     async def get_active(self) -> list[Tariff]:
         result = await self.session.execute(
-            select(Tariff)
-            .where(Tariff.is_active == True)  # noqa: E712
-            .order_by(Tariff.sort_order)
+            select(Tariff).where(Tariff.is_active == True).order_by(Tariff.sort_order)
         )
         return list(result.scalars().all())
 
@@ -21,8 +19,8 @@ class TariffRepo(BaseRepo[Tariff]):
         result = await self.session.execute(
             select(Tariff)
             .where(
-                Tariff.is_active == True,  # noqa: E712
-                (Tariff.server_id == server_id) | (Tariff.server_id == None),  # noqa: E711
+                Tariff.is_active == True,
+                (Tariff.server_id == server_id) | (Tariff.server_id == None),
             )
             .order_by(Tariff.sort_order)
         )
@@ -32,7 +30,7 @@ class TariffRepo(BaseRepo[Tariff]):
         result = await self.session.execute(
             select(Tariff).where(
                 Tariff.id == tariff_id,
-                Tariff.is_active == True,  # noqa: E712
+                Tariff.is_active == True,
             )
         )
         return result.scalar_one_or_none()

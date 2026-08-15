@@ -70,7 +70,7 @@ class UserRepo(BaseRepo[User]):
 
     async def get_all_active(self) -> list[User]:
         result = await self.session.execute(
-            select(User).where(User.is_active == True, User.is_banned == False)  # noqa: E712
+            select(User).where(User.is_active == True, User.is_banned == False)
         )
         return list(result.scalars().all())
 

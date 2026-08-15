@@ -98,7 +98,7 @@ async def handle_single_event(
 def _get_object(payload: dict[str, Any]) -> dict[str, Any]:
     obj = payload.get("object")
     if not isinstance(obj, dict):
-        raise ValueError("webhook payload missing 'object'")
+        raise ValueError("webhook payload missing 'object'")  # noqa: TRY004 — external malformed data, not a type-usage bug
     return obj
 
 

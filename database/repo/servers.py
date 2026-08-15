@@ -19,9 +19,7 @@ class ServerRepo(BaseRepo[Server]):
 
     async def get_active(self) -> list[Server]:
         result = await self.session.execute(
-            select(Server)
-            .where(Server.is_active == True)  # noqa: E712
-            .order_by(Server.sort_order),
+            select(Server).where(Server.is_active == True).order_by(Server.sort_order),
         )
         return list(result.scalars().all())
 
@@ -29,7 +27,7 @@ class ServerRepo(BaseRepo[Server]):
         result = await self.session.execute(
             select(Server).where(
                 Server.id == server_id,
-                Server.is_active == True,  # noqa: E712
+                Server.is_active == True,
             ),
         )
         return result.scalar_one_or_none()
