@@ -9,10 +9,13 @@
     у mypy-хука — pre-commit гоняет хуки в СВОИХ изолированных
     окружениях, версия там не зависит от .venv автоматически)
   - Dockerfile (версия base-образа python:X.Y-slim, builder и runtime)
+  - .github/workflows/ci.yml - соответствие python версии в джобе
+    с python версией в Dockerfile
   - pyproject.toml (mypy python_version, ruff target-version)
   - фактически установленные версии в текущем .venv — это то, что
     реально используется при `make check` / `pytest`, поэтому venv
     выступает источником истины для сравнения
+
 
 Любое расхождение — это сценарий "поправил версию в одном месте,
 забыл в другом": `make check` и pre-commit-хук (или venv и прод-образ)
@@ -31,6 +34,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess  # nosec B404
 import sys
 from importlib import metadata
 from pathlib import Path
@@ -198,30 +203,236 @@ def check_mypy_additional_dependencies(
             )
 
 
-def check_gitleaks_rev(pre_commit_path: Path, install_script_path: Path) -> None:
+def check_gitleaks_version(install_script_path: Path) -> None:
     if not install_script_path.exists():
         return
-    for _repo_url, rev, hook_ids in parse_pre_commit_config(pre_commit_path):
-        if "gitleaks" not in hook_ids:
-            continue
-        version = strip_v_prefix(rev)
-        match = re.search(
-            r'^GITLEAKS_VERSION="([^"]+)"',
-            install_script_path.read_text(),
-            re.MULTILINE,
+
+    match = re.search(
+        r'^GITLEAKS_VERSION="([^"]+)"',
+        install_script_path.read_text(),
+        re.MULTILINE,
+    )
+    if not match:
+        return
+
+    script_version = match.group(1)
+
+    gitleaks_bin = shutil.which("gitleaks")
+    if gitleaks_bin is None:
+        errors.append(
+            f"gitleaks не установлен в системе (ожидалась версия {script_version} из install-скрипта)"
         )
-        if not match:
-            continue
-        expected = match.group(1)
-        if expected != version:
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [gitleaks_bin, "version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+        if not installed_match:
+            errors.append("не удалось распарсить версию gitleaks из вывода команды")
+            return
+
+        installed_version = installed_match.group(1)
+        if script_version != installed_version:
             errors.append(
-                f"версия 'gitleaks' в '.pre-commit-config.yaml' (rev: {rev}) "
-                f"не соответствует версии в "
-                f"'tooling/install-gitleaks.sh' ({expected})"
+                f"версия 'gitleaks' в 'tooling/install-gitleaks.sh' ({script_version}) "
+                f"не соответствует установленной версии ({installed_version})"
             )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию gitleaks")
 
 
-def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
+def check_hadolint_version(install_script_path: Path) -> None:
+    if not install_script_path.exists():
+        return
+
+    match = re.search(
+        r'^HADOLINT_VERSION="([^"]+)"',
+        install_script_path.read_text(),
+        re.MULTILINE,
+    )
+    if not match:
+        return
+
+    script_version = match.group(1)
+
+    hadolint_bin = shutil.which("hadolint")
+    if hadolint_bin is None:
+        errors.append(
+            f"hadolint не установлен в системе (ожидалась версия {script_version} из install-скрипта)"
+        )
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [hadolint_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+        if not installed_match:
+            errors.append("не удалось распарсить версию hadolint из вывода команды")
+            return
+
+        installed_version = installed_match.group(1)
+        if script_version != installed_version:
+            errors.append(
+                f"версия 'hadolint' в 'tooling/install-hadolint.sh' ({script_version}) "
+                f"не соответствует установленной версии ({installed_version})"
+            )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию hadolint")
+
+
+def check_node_version(_install_script_path: Path, script_node: str) -> None:
+    node_bin = shutil.which("node")
+    if node_bin is None:
+        errors.append(
+            f"node не установлен в системе (ожидалась версия {script_node} из install-скрипта)"
+        )
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [node_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_node = result.stdout.strip().lstrip("v")
+        if script_node != installed_node:
+            errors.append(
+                f"версия 'node' в 'tooling/install-nodejs.sh' ({script_node}) "
+                f"не соответствует установленной версии ({installed_node})"
+            )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию node")
+
+
+def check_npm_version(_install_script_path: Path, script_npm: str) -> None:
+    npm_bin = shutil.which("npm")
+    if npm_bin is None:
+        errors.append(
+            f"npm не установлен в системе (ожидалась версия {script_npm} из install-скрипта)"
+        )
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [npm_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_npm = result.stdout.strip()
+        if script_npm != installed_npm:
+            errors.append(
+                f"версия 'npm' в 'tooling/install-nodejs.sh' ({script_npm}) "
+                f"не соответствует установленной версии ({installed_npm})"
+            )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию npm")
+
+
+def check_jscpd_version(_install_script_path: Path, script_jscpd: str) -> None:
+    jscpd_bin = shutil.which("jscpd")
+    if jscpd_bin is None:
+        errors.append(
+            f"jscpd не установлен в системе (ожидалась версия {script_jscpd} из install-скрипта)"
+        )
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [jscpd_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_jscpd_match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+        if not installed_jscpd_match:
+            errors.append("не удалось распарсить версию jscpd из вывода команды")
+            return
+
+        installed_jscpd = installed_jscpd_match.group(1)
+        if script_jscpd != installed_jscpd:
+            errors.append(
+                f"версия 'jscpd' в 'tooling/install-nodejs.sh' ({script_jscpd}) "
+                f"не соответствует установленной версии ({installed_jscpd})"
+            )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию jscpd")
+
+
+def check_nodejs_versions(install_script_path: Path) -> None:
+    if not install_script_path.exists():
+        return
+
+    script_text = install_script_path.read_text()
+
+    node_match = re.search(r'^NODE_VERSION="([^"]+)"', script_text, re.MULTILINE)
+    npm_match = re.search(r'^NPM_VERSION="([^"]+)"', script_text, re.MULTILINE)
+    jscpd_match = re.search(r'^JSCPD_VERSION="([^"]+)"', script_text, re.MULTILINE)
+
+    if not (node_match and npm_match and jscpd_match):
+        return
+
+    check_node_version(install_script_path, node_match.group(1))
+    check_npm_version(install_script_path, npm_match.group(1))
+    check_jscpd_version(install_script_path, jscpd_match.group(1))
+
+
+def check_trivy_version(install_script_path: Path) -> None:
+    if not install_script_path.exists():
+        return
+
+    match = re.search(
+        r'^TRIVY_VERSION="([^"]+)"',
+        install_script_path.read_text(),
+        re.MULTILINE,
+    )
+    if not match:
+        return
+
+    script_version = match.group(1)
+
+    trivy_bin = shutil.which("trivy")
+    if trivy_bin is None:
+        errors.append(
+            f"trivy не установлен в системе (ожидалась версия {script_version} из install-скрипта)"
+        )
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603, nosec B603
+            [trivy_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )  # nosec B603
+        installed_match = re.search(
+            r"Version:\s*(\d+\.\d+\.\d+)", result.stdout, re.IGNORECASE
+        )
+        if not installed_match:
+            errors.append("не удалось распарсить версию trivy из вывода команды")
+            return
+
+        installed_version = installed_match.group(1)
+        if script_version != installed_version:
+            errors.append(
+                f"версия 'trivy' в 'tooling/install-trivy.sh' ({script_version}) "
+                f"не соответствует установленной версии ({installed_version})"
+            )
+    except subprocess.CalledProcessError:
+        errors.append("не удалось получить версию trivy")
+
+
+def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> str | None:
     dockerfile_text = dockerfile_path.read_text()
     docker_versions = set(re.findall(r"FROM python:(\d+\.\d+)-slim", dockerfile_text))
 
@@ -230,7 +441,7 @@ def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
             "не удалось найти версию Python в Dockerfile "
             "(ожидался FROM python:X.Y-slim)"
         )
-        return
+        return None
 
     if len(docker_versions) > 1:
         errors.append(
@@ -238,7 +449,7 @@ def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
             f"{sorted(docker_versions)}"
         )
 
-    docker_version = min(docker_versions)
+    docker_version: str | None = min(docker_versions) if docker_versions else None
 
     venv_major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
     if venv_major_minor != docker_version:
@@ -247,8 +458,17 @@ def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
             f"версии в Dockerfile ({docker_version})"
         )
 
-    pyproject_text = pyproject_path.read_text()
+    check_mypy_python_version(pyproject_path, docker_version)
+    check_ruff_target_version(pyproject_path, docker_version)
 
+    return docker_version
+
+
+def check_mypy_python_version(pyproject_path: Path, docker_version: str | None) -> None:
+    if docker_version is None:
+        return
+
+    pyproject_text = pyproject_path.read_text()
     mypy_match = re.search(r'python_version\s*=\s*"([^"]+)"', pyproject_text)
     if mypy_match and mypy_match.group(1) != docker_version:
         errors.append(
@@ -256,6 +476,12 @@ def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
             f"не соответствует версии в Dockerfile ({docker_version})"
         )
 
+
+def check_ruff_target_version(pyproject_path: Path, docker_version: str | None) -> None:
+    if docker_version is None:
+        return
+
+    pyproject_text = pyproject_path.read_text()
     ruff_match = re.search(r'target-version\s*=\s*"py(\d)(\d+)"', pyproject_text)
     if ruff_match:
         ruff_version = f"{ruff_match.group(1)}.{ruff_match.group(2)}"
@@ -265,6 +491,27 @@ def check_python_version(dockerfile_path: Path, pyproject_path: Path) -> None:
                 f"(py{ruff_match.group(1)}{ruff_match.group(2)}) не "
                 f"соответствует версии в Dockerfile ({docker_version})"
             )
+
+
+def check_ci_python_version(ci_path: Path, docker_version: str | None) -> None:
+    if docker_version is None or not ci_path.exists():
+        return
+
+    ci_text = ci_path.read_text()
+    match = re.search(r'python-version:\s*"([^"]+)"', ci_text)
+    if not match:
+        errors.append(
+            f"не удалось найти python-version в '{ci_path.name}' "
+            f'(ожидался python-version: "X.Y")'
+        )
+        return
+
+    ci_version = match.group(1)
+    if ci_version != docker_version:
+        errors.append(
+            f"python-version в '{ci_path.name}' ({ci_version}) не "
+            f"соответствует версии в Dockerfile ({docker_version})"
+        )
 
 
 def main() -> int:
@@ -278,10 +525,12 @@ def main() -> int:
         ROOT / "requirements.txt",
         ROOT / "requirements-dev.txt",
     )
-    check_gitleaks_rev(
-        ROOT / ".pre-commit-config.yaml", ROOT / "tooling" / "install-gitleaks.sh"
-    )
-    check_python_version(ROOT / "Dockerfile", ROOT / "pyproject.toml")
+    check_gitleaks_version(ROOT / "tooling" / "install-gitleaks.sh")
+    check_hadolint_version(ROOT / "tooling" / "install-hadolint.sh")
+    check_nodejs_versions(ROOT / "tooling" / "install-nodejs.sh")
+    check_trivy_version(ROOT / "tooling" / "install-trivy.sh")
+    docker_version = check_python_version(ROOT / "Dockerfile", ROOT / "pyproject.toml")
+    check_ci_python_version(ROOT / ".github" / "workflows" / "ci.yml", docker_version)
 
     if errors:
         print("Расхождения версий:", file=sys.stderr)
@@ -289,7 +538,9 @@ def main() -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
-    print("Все версии соответствуют локальному окружению")
+    print(
+        "Все версии в проверенных файлах - соотвутствуют в местах где повторяются и локальному окружению"
+    )
     return 0
 
 
