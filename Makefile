@@ -1,4 +1,4 @@
-.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security semgrep license-check audit check-tool-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix dockerfile-lint duplication migrations-check migrations-check-server security-image test test-docker check check-server
+.PHONY: install-hooks secrets-scan lint lint-fix format typecheck security semgrep license-check audit check-versions deadcode deps architecture architecture-diagram complexity-report complexity-gate sql-lint sql-fix dockerfile-lint duplication migrations-check migrations-check-server security-image test test-docker check check-server
 
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 LINT_IMPORTS := $(if $(wildcard .venv/bin/lint-imports),.venv/bin/lint-imports,lint-imports)
@@ -37,8 +37,8 @@ audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
 	$(PYTHON) -m pip_audit -r requirements-dev.txt
 
-check-tool-versions:
-	bash tooling/check-tool-versions.sh
+check-versions:
+	$(PYTHON) tooling/check-versions.py
 
 deadcode:
 	$(PYTHON) -m vulture
@@ -99,6 +99,6 @@ test-docker:
 	  -v "$(CURDIR)/tests/reports:/app/tests/reports" \
 	  bot bash -lc "pip install -r requirements-dev.txt --quiet && python -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70"
 
-check: install-hooks lint typecheck security semgrep license-check secrets-scan audit check-tool-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
+check: install-hooks lint typecheck security semgrep license-check secrets-scan audit check-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
 
-check-server: lint typecheck security semgrep license-check secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker
+check-server: lint typecheck security semgrep license-check secrets-scan audit check-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker

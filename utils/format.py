@@ -30,7 +30,12 @@ def parse_price(raw: str) -> int | None:
     parse_price("50") -> 5000
     parse_price("49.99") -> 4999
     parse_price("не число") -> None
+    parse_price("0" * 1000) -> None  # очень длинная строка
     """
+    # Ограничиваем длину строки (защита от DoS)
+    if len(raw) > 20:
+        return None
+
     normalized = raw.strip().replace(",", ".")
     try:
         value = Decimal(normalized)

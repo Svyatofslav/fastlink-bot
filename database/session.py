@@ -47,7 +47,7 @@ def get_test_session_factory(pool_size: int = 1) -> async_sessionmaker[AsyncSess
     return _cache.test_factory
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     async_session_factory = get_async_session_factory()
     async with async_session_factory() as session:
         yield session

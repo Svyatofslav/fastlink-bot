@@ -6,6 +6,7 @@ from aiogram import Router
 
 from database.enums import PaymentStatus
 from database.repo.payments import PaymentRepo
+from database.repo.users import UserRepo
 from keyboards.client import CB_PAYMENT_CANCEL, CB_PAYMENT_CHECK, main_menu_kb
 from services.payment import PaymentService
 from states.purchase import clear_purchase_state
@@ -69,7 +70,12 @@ async def on_payment_check(
         price = format_price(payment.amount, payment.currency)
         text = t("payment.succeeded.message", lang, price=price)
         await message.edit_reply_markup(reply_markup=None)
-        await message.answer(text, reply_markup=main_menu_kb(user))
+        sent = await message.answer(
+            text, reply_markup=main_menu_kb(user)
+        )  # <-- ВАЖНО: сохраняем sent
+        await UserRepo(session).set_last_active_message_id(
+            user, sent.message_id
+        )  # <-- ВАЖНО
         await callback.answer()
         return
 

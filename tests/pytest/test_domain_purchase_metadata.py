@@ -238,3 +238,92 @@ def test_build_new_subscription_params_from_metadata_missing_starts_at() -> None
 
     assert params.starts_at is None
     assert params.expires_at == datetime.fromisoformat("2026-09-01T12:00:00+00:00")
+
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+
+@given(
+    telegram_id=st.integers(min_value=1, max_value=10_000_000),
+    username=st.text(min_size=1, max_size=32),
+    server_name=st.text(min_size=1, max_size=64),
+    server_emoji=st.one_of(st.just("🇳🇱"), st.just("🇩🇪"), st.just("🇺🇸"), st.just("")),
+    inbound_tag=st.text(min_size=1, max_size=32),
+    tariff_name=st.text(min_size=1, max_size=64),
+    duration_days=st.integers(min_value=1, max_value=365),
+    data_limit_bytes=st.integers(min_value=1_000_000, max_value=1_000_000_000_000),
+    price_amount=st.integers(min_value=1, max_value=1_000_000),
+    price_currency=st.sampled_from(["RUB", "USD", "EUR"]),
+    is_extend=st.booleans(),
+    extend_subscription_id=st.one_of(
+        st.integers(min_value=1, max_value=10_000), st.none()
+    ),
+)
+@settings(max_examples=200, deadline=None)
+def test_build_purchase_metadata_property_based(
+    telegram_id: int,
+    username: str,
+    server_name: str,
+    server_emoji: str,
+    inbound_tag: str,
+    tariff_name: str,
+    duration_days: int,
+    data_limit_bytes: int,
+    price_amount: int,
+    price_currency: str,
+    is_extend: bool,
+    extend_subscription_id: int | None,
+) -> None:
+    """
+    Property-тест: build_purchase_metadata работает для ЛЮБЫХ данных.
+
+    Проверяет:
+    - Возвращает dict с правильной структурой
+    - Все ключи присутствуют
+    - Типы данных корректны
+    - Флаги is_extend/extend_subscription_id работают
+    """
+    user = make_user(telegram_id=telegram_id, username=username)
+    server = make_server(
+        name=server_name,
+        emoji=server_emoji,
+        inbound_tag=inbound_tag,
+    )
+    tariff = make_tariff(
+        server_id=server.id,
+        name=tariff_name,
+        duration_days=duration_days,
+        data_limit_bytes=data_limit_bytes,
+        price_amount=price_amount,
+        price_currency=price_currency,
+    )
+    fsm_data = {
+        DATA_IS_EXTEND: is_extend,
+        DATA_EXTEND_SUBSCRIPTION_ID: extend_subscription_id,
+    }
+
+    metadata = build_purchase_metadata(
+        user=user,
+        server=server,
+        tariff=tariff,
+        fsm_data=fsm_data,
+    )
+
+    # Проверяем структуру
+    assert isinstance(metadata, dict)
+    assert "user" in metadata
+    assert "server" in metadata
+    assert "tariff" in metadata
+    assert "subscription" in metadata
+    assert "flags" in metadata
+
+    # Проверяем флаги
+    assert metadata["flags"]["is_extend"] == is_extend
+    assert metadata["flags"]["extend_subscription_id"] == extend_subscription_id
+
+    # Проверяем, что subscription не None
+    assert metadata["subscription"] is not None
+    assert "marzban_username" in metadata["subscription"]
+    assert "starts_at" in metadata["subscription"]
+    assert "expires_at" in metadata["subscription"]

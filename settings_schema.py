@@ -91,10 +91,6 @@ class Settings(BaseSettings):
     )
 
     default_language: str = Field(default="ru", alias="DEFAULT_LANGUAGE")
-    feature_i18n_enabled: bool = Field(
-        default=False,
-        alias="FEATURE_I18N_ENABLED",
-    )
 
     yookassa_shop_id: str = Field(default="", alias="YOOKASSA_SHOP_ID")
     yookassa_secret_key: str = Field(default="", alias="YOOKASSA_SECRET_KEY")

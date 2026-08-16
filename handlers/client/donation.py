@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 
 from config import settings
 from database.enums import PaymentProvider
+from database.repo.users import UserRepo
 from domain.donation_metadata import build_donation_metadata
 from handlers.client.menu import render_main_menu
 from keyboards.client import (
@@ -21,6 +22,7 @@ from services.payment import PaymentService
 from states.donation import DATA_DONATION_PAYMENT_IN_PROGRESS, DonationStates
 from utils.format import format_price, parse_price
 from utils.i18n import t
+from utils.telegram import disable_previous_menu
 
 if TYPE_CHECKING:
     from aiogram.fsm.context import FSMContext
@@ -132,12 +134,25 @@ async def on_donation_amount_entered(
     confirmation_url = cast("str", payment.confirmation_url)
 
     await state.set_state(DonationStates.awaiting_payment)
+
+    # Гасим клавиатуру предыдущего сообщения ("Введите сумму доната...")
+    # перед отправкой нового с кнопками оплаты — иначе старая кнопка "Отменить"
+    # останется активной параллельно с новым меню.
+    bot = message.bot
+    if bot is not None:
+        await disable_previous_menu(
+            bot,
+            message.chat.id,
+            user.last_active_message_id,
+        )
+
     price = format_price(payment.amount, payment.currency)
     text = t("donation.payment_created", lang, price=price)
-    await message.answer(
+    sent = await message.answer(
         text,
         reply_markup=payment_kb(payment.id, confirmation_url, user),
     )
+    await UserRepo(session).set_last_active_message_id(user, sent.message_id)
 
 
 @router.callback_query(lambda c: c.data == CB_DONATION_CANCEL)
