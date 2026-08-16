@@ -29,10 +29,19 @@
 надёжно при текущей структуре файла; если структура сильно изменится
 (например, вложенные списки хуков нестандартной формы) — проверь,
 что парсер всё ещё видит нужные блоки.
+
+Режимы работы (определяются через APP_ENV из .env или переменной окружения):
+  - development → dev:    без проверки trivy (используется только на проде)
+  - test        → ci:     без проверки trivy (не устанавливается в lint-джобе CI)
+  - production  → server: полный набор проверок, включая trivy
+                           (ставится через deploy/scripts/fastlink-ci update-trivy)
+
+Если APP_ENV не задан или не распознан — используется режим dev.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess  # nosec B404
@@ -40,9 +49,24 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parent.parent
 
+load_dotenv(ROOT / ".env")
+
 errors: list[str] = []
+
+APP_ENV_TO_MODE = {
+    "development": "dev",
+    "test": "ci",
+    "production": "server",
+}
+
+
+def get_mode() -> str:
+    app_env = os.environ.get("APP_ENV", "development")
+    return APP_ENV_TO_MODE.get(app_env, "dev")
 
 
 def normalize(name: str) -> str:
@@ -515,6 +539,8 @@ def check_ci_python_version(ci_path: Path, docker_version: str | None) -> None:
 
 
 def main() -> int:
+    mode = get_mode()
+
     check_requirements_vs_venv(ROOT / "requirements.txt")
     check_requirements_vs_venv(ROOT / "requirements-dev.txt")
     check_pre_commit_revs(
@@ -528,18 +554,22 @@ def main() -> int:
     check_gitleaks_version(ROOT / "tooling" / "install-gitleaks.sh")
     check_hadolint_version(ROOT / "tooling" / "install-hadolint.sh")
     check_nodejs_versions(ROOT / "tooling" / "install-nodejs.sh")
-    check_trivy_version(ROOT / "tooling" / "install-trivy.sh")
+
+    if mode == "server":
+        check_trivy_version(ROOT / "tooling" / "install-trivy.sh")
+
     docker_version = check_python_version(ROOT / "Dockerfile", ROOT / "pyproject.toml")
     check_ci_python_version(ROOT / ".github" / "workflows" / "ci.yml", docker_version)
 
     if errors:
-        print("Расхождения версий:", file=sys.stderr)
+        print(f"[mode={mode}] Расхождения версий:", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
     print(
-        "Все версии в проверенных файлах - соотвутствуют в местах где повторяются и локальному окружению"
+        f"[mode={mode}] Все версии в проверенных файлах - соответствуют "
+        f"в местах где повторяются и локальному окружению"
     )
     return 0
 
