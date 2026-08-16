@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,8 @@ from database.enums import (
 from database.models import Payment, Refund, RefundRequest, User
 from database.repo.refunds import RefundRepo
 from services.refund import RefundAmountExceedsPaymentError, RefundService
+
+_property_test_counter = itertools.count(1)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,3 +241,111 @@ async def test_process_refund_result_defensive_check_marks_failed(
     await db_session.refresh(payment)
     assert payment.refunded_amount == 6000
     assert payment.status == PaymentStatus.REFUNDED_PARTIALLY
+
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+
+@given(
+    payment_amount=st.integers(min_value=1, max_value=10_000_000_000),
+    existing_refund_amount=st.integers(min_value=0, max_value=10_000_000_000),
+    refund_amount=st.integers(min_value=-1_000_000, max_value=10_000_000_000),
+)
+@settings(
+    max_examples=200,
+    deadline=None,
+    suppress_health_check=[
+        HealthCheck.too_slow,
+        HealthCheck.function_scoped_fixture,
+    ],
+)
+@pytest.mark.asyncio
+async def test_refund_amount_validation_property_based(
+    db_session: AsyncSession,
+    payment_amount: int,
+    existing_refund_amount: int,
+    refund_amount: int,
+) -> None:
+    """
+    Property-based тест: Hypothesis генерирует случайные суммы платежа,
+    уже существующего рефанда в БД и сумму нового рефанда.
+
+    Проверяем инварианты:
+    - refund_amount <= 0 всегда вызывает ValueError
+    - refund_amount > available (payment_amount - existing_refund_amount)
+      всегда вызывает RefundAmountExceedsPaymentError
+    - refund_amount > 0 и <= available проходит валидацию без ошибок
+    """
+    from database.enums import RefundStatus
+    from database.repo.refunds import RefundRepo
+    from services.refund import RefundAmountExceedsPaymentError, RefundService
+
+    # Нормализуем existing_refund_amount: он не может быть больше payment_amount
+    existing_refund_amount = min(existing_refund_amount, payment_amount)
+    available = payment_amount - existing_refund_amount
+
+    unique_id = next(_property_test_counter)
+    user = await _make_user(db_session, telegram_id=810_000_005 + unique_id)
+    payment = await _make_payment(
+        db_session,
+        user,
+        amount=payment_amount,
+        idempotence_key=f"refund-prop-{unique_id}-{payment_amount}",
+        refunded_amount=0,  # пока 0, создадим рефанд ниже
+        status=PaymentStatus.SUCCEEDED,
+    )
+
+    # Создаём существующий рефанд в БД (если existing_refund_amount > 0)
+    if existing_refund_amount > 0:
+        existing_refund_request = await _make_refund_request(db_session, user, payment)
+        await RefundRepo(db_session).create(
+            payment_id=payment.id,
+            refund_request_id=existing_refund_request.id,
+            provider=payment.provider,
+            provider_refund_id=None,
+            amount=existing_refund_amount,
+            currency="RUB",
+            status=RefundStatus.SUCCEEDED,  # активный рефанд
+            raw_payload=None,
+            completed_at=datetime.now(UTC),
+        )
+        await db_session.commit()
+        # Обновляем Payment.refunded_amount (это делает сервис в проде)
+        payment.refunded_amount = existing_refund_amount
+        await db_session.commit()
+
+    refund_request = await _make_refund_request(db_session, user, payment)
+    refund_service = RefundService(db_session)
+
+    if refund_amount <= 0:
+        with pytest.raises(ValueError, match="must be positive"):
+            await refund_service.create_refund_for_request(
+                refund_request_id=refund_request.id,
+                amount=refund_amount,
+                currency="RUB",
+            )
+    elif refund_amount > available:
+        with pytest.raises(RefundAmountExceedsPaymentError) as exc_info:
+            await refund_service.create_refund_for_request(
+                refund_request_id=refund_request.id,
+                amount=refund_amount,
+                currency="RUB",
+            )
+        assert exc_info.value.payment_id == payment.id
+        assert exc_info.value.requested == refund_amount
+        assert exc_info.value.available == available
+    else:
+        try:
+            refund = await refund_service.create_refund_for_request(
+                refund_request_id=refund_request.id,
+                amount=refund_amount,
+                currency="RUB",
+            )
+            assert refund.amount == refund_amount
+        except RefundAmountExceedsPaymentError:
+            pytest.fail(
+                f"RefundAmountExceedsPaymentError raised unexpectedly: "
+                f"payment_amount={payment_amount}, existing_refund={existing_refund_amount}, "
+                f"available={available}, refund_amount={refund_amount}"
+            )

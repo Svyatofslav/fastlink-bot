@@ -64,9 +64,12 @@ dump/
 coverage.xml
 tests/reports/*
 !tests/reports/.gitkeep
+.hypothesis/
 
-# Deploy runtime state
-deploy/state/
+# Runtime state files — генерируются на сервере деплой-скриптом,
+# в репозитории должна быть только пустая папка (см. .gitkeep)
+deploy/state/*
+!deploy/state/.gitkeep
 
 # Server checkout
 deploy/reports/scheduled-check/*

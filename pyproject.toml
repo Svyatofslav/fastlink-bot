@@ -34,7 +34,7 @@ timeout = 30
 timeout_method = "thread"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 plugins = ["pydantic.mypy"]
 
 warn_return_any = true
@@ -86,7 +86,7 @@ ignore_missing_imports = false
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 extend-exclude = ["alembic"]
 
 [tool.ruff.format]
