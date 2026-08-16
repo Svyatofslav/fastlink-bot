@@ -87,6 +87,7 @@ migrations-check-server:
 security-image:
 	trivy image --severity MEDIUM,HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
 	trivy image --severity LOW,UNKNOWN --exit-code 0 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
+	trivy clean --all
 
 test:
 	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
