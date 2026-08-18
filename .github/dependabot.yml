@@ -49,3 +49,6 @@ updates:
       prefix: "chore(pre-commit)"
     labels:
       - "dependencies"
+    ignore:
+      - dependency-name: "redis"
+        versions: [">=6"]
