@@ -1,0 +1,27 @@
+# .github/workflows/renovate.yml
+name: Renovate
+
+on:
+  # Запуск по расписанию (понедельник 03:00 UTC, как у Dependabot)
+  schedule:
+    - cron: "0 3 * * 1"
+  # Ручной запуск через UI (кнопка "Run workflow")
+  workflow_dispatch:
+
+# Важно: отменяем предыдущие запуски, чтобы не плодить дубли
+concurrency:
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Renovate
+        uses: renovatebot/github-action@v40
+        with:
+          configurationFile: renovate.json5
+          token: ${{ secrets.RENOVATE_TOKEN }}
