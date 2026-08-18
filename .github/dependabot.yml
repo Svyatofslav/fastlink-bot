@@ -39,3 +39,13 @@ updates:
       prefix: "chore(ci)"
     labels:
       - "dependencies"
+
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(pre-commit)"
+    labels:
+      - "dependencies"

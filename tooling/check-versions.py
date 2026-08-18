@@ -227,6 +227,44 @@ def check_mypy_additional_dependencies(
             )
 
 
+def check_gitleaks_pre_commit_sync(
+    install_script_path: Path,
+    pre_commit_path: Path,
+) -> None:
+    """Сверка версии gitleaks между install-скриптом и .pre-commit-config.yaml."""
+    if not install_script_path.exists():
+        return
+
+    # Извлекаем версию из install-скрипта
+    script_match = re.search(
+        r'^GITLEAKS_VERSION="([^"]+)"',
+        install_script_path.read_text(),
+        re.MULTILINE,
+    )
+    if not script_match:
+        return
+
+    script_version = script_match.group(1)
+
+    # Извлекаем rev из .pre-commit-config.yaml для gitleaks
+    pre_commit_text = pre_commit_path.read_text()
+    # Ищем блок repo: https://github.com/gitleaks/gitleaks
+    gitleaks_block_match = re.search(
+        r'-\s*repo:\s*https://github\.com/gitleaks/gitleaks\s*\n\s*rev:\s*"?([^"\n]+)"?',
+        pre_commit_text,
+    )
+    if not gitleaks_block_match:
+        return
+
+    pre_commit_rev = gitleaks_block_match.group(1).removeprefix("v")
+
+    if script_version != pre_commit_rev:
+        errors.append(
+            f"версия 'gitleaks' в 'tooling/install-gitleaks.sh' ({script_version}) "
+            f"не соответствует версии в '.pre-commit-config.yaml' (rev: v{pre_commit_rev})"
+        )
+
+
 def check_gitleaks_version(install_script_path: Path) -> None:
     if not install_script_path.exists():
         return
@@ -550,6 +588,10 @@ def main() -> int:
         ROOT / ".pre-commit-config.yaml",
         ROOT / "requirements.txt",
         ROOT / "requirements-dev.txt",
+    )
+    check_gitleaks_pre_commit_sync(
+        ROOT / "tooling" / "install-gitleaks.sh",
+        ROOT / ".pre-commit-config.yaml",
     )
     check_gitleaks_version(ROOT / "tooling" / "install-gitleaks.sh")
     check_hadolint_version(ROOT / "tooling" / "install-hadolint.sh")

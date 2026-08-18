@@ -1,0 +1,88 @@
+// renovate.json5
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Не трогать pip/docker/github-actions/pre-commit — это уже покрывает Dependabot
+  enabledManagers: ["custom.regex"],
+
+  // Один PR на всё (чтобы не плодить 6 отдельных PR на gitleaks/hadolint/node/npm/jscpd/trivy)
+  prHourlyLimit: 0,
+  prConcurrentLimit: 1,
+
+  // Группировать всё в один PR
+  packageRules: [
+    {
+      groupName: "tooling install scripts",
+      matchPackageNames: ["*"],
+    },
+  ],
+
+  // Кастомные менеджеры для каждого скрипта
+  customManagers: [
+    // --- gitleaks ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-gitleaks\\.sh$"],
+      matchStrings: [
+        'GITLEAKS_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "gitleaks/gitleaks",
+    },
+
+    // --- hadolint ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-hadolint\\.sh$"],
+      matchStrings: [
+        'HADOLINT_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "hadolint/hadolint",
+    },
+
+    // --- node ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
+      matchStrings: [
+        'NODE_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "node",
+      depNameTemplate: "node",
+    },
+
+    // --- npm ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
+      matchStrings: [
+        'NPM_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "npm",
+      depNameTemplate: "npm",
+    },
+
+    // --- jscpd ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
+      matchStrings: [
+        'JSCPD_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "npm",
+      depNameTemplate: "jscpd",
+    },
+
+    // --- trivy ---
+    {
+      customType: "regex",
+      managerFilePatterns: ["^tooling/install-trivy\\.sh$"],
+      matchStrings: [
+        'TRIVY_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "aquasecurity/trivy",
+    },
+  ],
+}
