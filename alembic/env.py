@@ -10,10 +10,10 @@ from config import get_settings  # вместо прямого import settings
 from database.base import Base
 import database.models  # noqa: F401
 
-# ─── Load environment (.env + optional .env.local) ─────────
-# .env.local переопределяет значения из .env, если существует.
+# ─── Load environment (.env + optional .env.override) ─────────
+# .env.override переопределяет значения из .env, если существует.
 load_dotenv(".env", override=False)
-load_dotenv(".env.local", override=True)
+load_dotenv(".env.override", override=True)
 
 # Пересобираем Settings с учётом загруженных переменных.
 get_settings.cache_clear()

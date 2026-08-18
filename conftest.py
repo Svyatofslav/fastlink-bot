@@ -21,12 +21,12 @@ if str(ROOT) not in sys.path:
 
 # 2. Загрузить .env и .env.local ДО импортов тестовых модулей
 env_file = Path(".env")
-env_local_file = Path(".env.local")
+env_local_file = Path(".env.override")
 
 if env_file.exists():
     load_dotenv(".env", override=False)
 if env_local_file.exists():
-    load_dotenv(".env.local", override=True)
+    load_dotenv(".env.override", override=True)
 
 # 3. Сбросить кэш настроек, чтобы Settings() пересоздался с уже загруженными env
 get_settings.cache_clear()
