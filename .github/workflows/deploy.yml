@@ -157,6 +157,11 @@ jobs:
           echo "DEPLOY_SOURCE=${{ steps.mode.outputs.source }}"
           echo "DRY_RUN=${{ steps.mode.outputs.dry_run }}"
 
+
+      - name: Fix apt sources (avoid flaky Azure mirror)
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+
       - name: Install deploy dependencies
         run: |
           sudo apt-get update
