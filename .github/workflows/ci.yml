@@ -176,7 +176,7 @@ jobs:
         run: docker build -t fastlink-bot-ci .
 
       - name: Scan image with Trivy (blocking)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
         with:
           image-ref: fastlink-bot-ci
           severity: MEDIUM,HIGH,CRITICAL
@@ -186,7 +186,7 @@ jobs:
 
       - name: Scan image with Trivy (report LOW/UNKNOWN, non-blocking)
         if: always()
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
         with:
           image-ref: fastlink-bot-ci
           severity: LOW,UNKNOWN
