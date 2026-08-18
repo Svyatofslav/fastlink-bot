@@ -2,9 +2,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
-  // Явно указываем репозиторий (или включи autodiscover: true)
-  repositories: ["Svyatofslav/fastlink-bot"],
-
   // Не трогать pip/docker/github-actions/pre-commit — это уже покрывает Dependabot
   enabledManagers: ["custom.regex"],
 
@@ -21,71 +18,70 @@
   ],
 
   // Кастомные менеджеры для каждого скрипта
-  customManagers: [
-    // --- gitleaks ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-gitleaks\\.sh$"],
-      matchStrings: [
-        'GITLEAKS_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "github-releases",
-      depNameTemplate: "gitleaks/gitleaks",
-    },
+customManagers: [
+  // --- gitleaks ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-gitleaks.sh"],
+    matchStrings: [
+      'GITLEAKS_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "github-releases",
+    depNameTemplate: "gitleaks/gitleaks",
+  },
 
-    // --- hadolint ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-hadolint\\.sh$"],
-      matchStrings: [
-        'HADOLINT_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "github-releases",
-      depNameTemplate: "hadolint/hadolint",
-    },
+  // --- hadolint ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-hadolint.sh"],
+    matchStrings: [
+      'HADOLINT_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "github-releases",
+    depNameTemplate: "hadolint/hadolint",
+  },
 
-    // --- node ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
-      matchStrings: [
-        'NODE_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "node",
-      depNameTemplate: "node",
-    },
+  // --- node ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-nodejs.sh"],
+    matchStrings: [
+      'NODE_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "node",
+    depNameTemplate: "node",
+  },
 
-    // --- npm ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
-      matchStrings: [
-        'NPM_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "npm",
-      depNameTemplate: "npm",
-    },
+  // --- npm ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-nodejs.sh"],
+    matchStrings: [
+      'NPM_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "npm",
+    depNameTemplate: "npm",
+  },
 
-    // --- jscpd ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-nodejs\\.sh$"],
-      matchStrings: [
-        'JSCPD_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "npm",
-      depNameTemplate: "jscpd",
-    },
+  // --- jscpd ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-nodejs.sh"],
+    matchStrings: [
+      'JSCPD_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "npm",
+    depNameTemplate: "jscpd",
+  },
 
-    // --- trivy ---
-    {
-      customType: "regex",
-      managerFilePatterns: ["^tooling/install-trivy\\.sh$"],
-      matchStrings: [
-        'TRIVY_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: "github-releases",
-      depNameTemplate: "aquasecurity/trivy",
-    },
-  ],
-}
+  // --- trivy ---
+  {
+    customType: "regex",
+    managerFilePatterns: ["tooling/install-trivy.sh"],
+    matchStrings: [
+      'TRIVY_VERSION="(?<currentValue>[^"]+)"',
+    ],
+    datasourceTemplate: "github-releases",
+    depNameTemplate: "aquasecurity/trivy",
+  },
+],
