@@ -121,7 +121,7 @@ repos:
   - repo: local
     hooks:
       - id: check-versions
-        name: check versions sync (requirements/pre-commit/Dockerfile/venv)
+        name: check versions sync (requirements/pre-commit/Dockerfile/venv/ci/install)
         entry: .venv/bin/python tooling/check-versions.py
         language: system
         pass_filenames: false
