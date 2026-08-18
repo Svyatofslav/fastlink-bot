@@ -2,6 +2,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
+  // Явно указываем репозиторий (или включи autodiscover: true)
+  repositories: ["Svyatofslav/fastlink-bot"],
+
   // Не трогать pip/docker/github-actions/pre-commit — это уже покрывает Dependabot
   enabledManagers: ["custom.regex"],
 
