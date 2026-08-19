@@ -58,24 +58,10 @@ jobs:
           push: true
           tags: ghcr.io/svyatofslav/fastlink-bot:${{ github.sha }}
 
-      - name: Scan image with Trivy (blocking)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
+      - name: Scan built image with Trivy
+        uses: ./.github/actions/trivy-scan
         with:
           image-ref: ghcr.io/svyatofslav/fastlink-bot:${{ github.sha }}
-          severity: MEDIUM,HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          trivyignores: tooling/.trivyignore
-
-      - name: Scan image with Trivy (report LOW/UNKNOWN, non-blocking)
-        if: always()
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.35.0, confirmed safe post-supply-chain-compromise (2026-03)
-        with:
-          image-ref: ghcr.io/svyatofslav/fastlink-bot:${{ github.sha }}
-          severity: LOW,UNKNOWN
-          ignore-unfixed: true
-          exit-code: "0"
-          trivyignores: tooling/.trivyignore
 
       - name: Export image ref
         id: export
