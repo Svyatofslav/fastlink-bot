@@ -84,5 +84,16 @@
       datasourceTemplate: "github-releases",
       depNameTemplate: "aquasecurity/trivy",
     },
+
+    // --- gitleaks (pre-commit rev, синхронно с install-gitleaks.sh) ---
+    {
+      customType: "regex",
+      managerFilePatterns: [".pre-commit-config.yaml"],
+      matchStrings: [
+        "repo:\\s*https://github\\.com/gitleaks/gitleaks\\s*\\n\\s*rev:\\s*(?<currentValue>\\S+)",
+      ],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "gitleaks/gitleaks",
+    },
   ],
 }
