@@ -52,3 +52,4 @@ updates:
     ignore:
       - dependency-name: "redis"
         versions: [">=6"]
+      - dependency-name: "gitleaks/gitleaks"
