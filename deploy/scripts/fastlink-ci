@@ -302,24 +302,35 @@ cmd_update_nodejs() {
   local script="$APP_DIR/tooling/install-nodejs.sh"
   test -f "$script"
 
-  local target_version
-  target_version="$(grep -oP '^NODE_VERSION="\K[0-9.]+(?=")' "$script")"
-  test -n "$target_version"
+  local target_node target_npm target_jscpd
+  target_node="$(grep -oP '^NODE_VERSION="\K[0-9.]+(?=")' "$script")"
+  target_npm="$(grep -oP '^NPM_VERSION="\K[0-9.]+(?=")' "$script")"
+  target_jscpd="$(grep -oP '^JSCPD_VERSION="\K[0-9.]+(?=")' "$script")"
+  test -n "$target_node"
+  test -n "$target_npm"
+  test -n "$target_jscpd"
 
-  local current_version=""
+  local current_node="" current_npm="" current_jscpd=""
   if command -v node >/dev/null 2>&1; then
-    current_version="$(node --version 2>/dev/null | sed 's/^v//')"
+    current_node="$(node --version 2>/dev/null | sed 's/^v//')"
+  fi
+  if command -v npm >/dev/null 2>&1; then
+    current_npm="$(npm --version 2>/dev/null)"
+  fi
+  if command -v jscpd >/dev/null 2>&1; then
+    current_jscpd="$(jscpd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
   fi
 
-  if [[ "$current_version" == "$target_version" ]]; then
-    log "NODEJS_ALREADY_CURRENT=$target_version"
+  if [[ "$current_node" == "$target_node" && "$current_npm" == "$target_npm" && "$current_jscpd" == "$target_jscpd" ]]; then
+    log "NODEJS_ALREADY_CURRENT=node=$target_node,npm=$target_npm,jscpd=$target_jscpd"
     node --version
     npm --version
+    jscpd --version
     return 0
   fi
 
   bash "$script"
-  log "NODEJS_UPDATED_TO=$target_version"
+  log "NODEJS_UPDATED_TO=node=$target_node,npm=$target_npm,jscpd=$target_jscpd"
 }
 
 cmd_update_hadolint() {
