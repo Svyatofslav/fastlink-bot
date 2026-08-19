@@ -40,6 +40,6 @@ RUN useradd -r -u 10001 -g root appuser && \
     mkdir -p /app/logs && \
     chown -R appuser:root /app
 
-USER appuser
+USER 10001:0
 
 CMD ["python", "bot.py"]
