@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+# Допустимые типы событий от YooKassa, которые мы обрабатываем.
+# Полный список: https://yookassa.ru/developers/api#notification-object
+YooKassaEvent = Literal[
+    "payment.waiting_for_capture",
+    "payment.succeeded",
+    "payment.canceled",
+    "payment.refunded",
+    "refund.succeeded",
+    "refund.failed",
+]
 
 
 class YooKassaAmount(BaseModel):
@@ -47,11 +58,9 @@ class YooKassaNotificationPayload(BaseModel):
     Нормализуется ДО записи в WebhookEvent.payload.
     """
 
-    event: str = Field(
+    event: YooKassaEvent = Field(
         ...,
-        min_length=1,
-        max_length=64,
-        description="Тип события, например 'payment.waiting_for_capture', 'payment.succeeded'.",
+        description="Тип события от YooKassa (payment.succeeded, payment.canceled, и т.д.).",
     )
     object: YooKassaPaymentObject
     # здесь можно добавить поля типа 'type', 'api_version' при необходимости

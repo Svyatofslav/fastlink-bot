@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, update
@@ -97,13 +97,13 @@ class WebhookEventsRepo(BaseRepo[WebhookEvent]):
             .where(WebhookEvent.id == event_id)
             .values(
                 status=WebhookEventStatus.DONE,
-                updated_at=datetime.now().astimezone(),
+                updated_at=datetime.now(UTC),
             )
         )
         await self.session.execute(stmt)
 
     async def mark_failed(self, event_id: int, error_message: str) -> None:
-        now = datetime.now().astimezone()
+        now = datetime.now(UTC)
         stmt = (
             update(WebhookEvent)
             .where(WebhookEvent.id == event_id)

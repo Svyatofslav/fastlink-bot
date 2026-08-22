@@ -22,6 +22,7 @@ from middlewares import (
     ThrottlingMiddleware,
     UserMiddleware,
 )
+from utils.telegram import set_bot_username, set_support_bot_username
 from webhooks.test import test_webhook
 from webhooks.yookassa import yookassa_webhook
 
@@ -59,7 +60,7 @@ def setup_middlewares(dp: Dispatcher, redis_rate_limit: Redis) -> None:
     dp.callback_query.middleware(throttling_middleware)
 
 
-def build_bot_and_dispatcher() -> tuple[Redis, Redis, Bot, Dispatcher]:
+async def build_bot_and_dispatcher() -> tuple[Redis, Redis, Bot, Dispatcher]:
     """Собирает Redis-клиенты, Bot и Dispatcher с подключёнными мидлварями/роутером."""
     redis_fsm = Redis.from_url(settings.redis_url_fsm)
     redis_rate_limit = Redis.from_url(settings.redis_url_rate_limit)
@@ -69,6 +70,39 @@ def build_bot_and_dispatcher() -> tuple[Redis, Redis, Bot, Dispatcher]:
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=settings.bot_parse_mode),
     )
+
+    me = await bot.get_me()
+    if me.username is None:
+        raise RuntimeError(
+            "Telegram Bot API returned no username for bot.get_me() — "
+            "unexpected, every registered bot must have a username"
+        )
+    set_bot_username(me.username)
+    structlog.get_logger(__name__).info("bot_username_resolved", username=me.username)
+
+    if settings.support_bot_token:
+        support_bot = Bot(token=settings.support_bot_token)
+        try:
+            support_me = await support_bot.get_me()
+        except Exception as exc:  # noqa: BLE001 — best-effort, support-бот опционален
+            structlog.get_logger(__name__).warning(
+                "support_bot_get_me_failed", error=str(exc)
+            )
+        else:
+            if support_me.username is not None:
+                set_support_bot_username(support_me.username)
+                structlog.get_logger(__name__).info(
+                    "support_bot_username_resolved", username=support_me.username
+                )
+            else:
+                structlog.get_logger(__name__).warning(
+                    "support_bot_username_missing_from_api"
+                )
+        finally:
+            await support_bot.session.close()
+    else:
+        structlog.get_logger(__name__).info("support_bot_token_not_configured")
+
     dp = Dispatcher(storage=storage)
     setup_middlewares(dp, redis_rate_limit)
     dp.include_router(root_router)
@@ -161,7 +195,7 @@ async def on_shutdown(app: web.Application) -> None:
 async def run_webhook_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
-    redis_fsm, redis_rate_limit, bot, dp = build_bot_and_dispatcher()
+    redis_fsm, redis_rate_limit, bot, dp = await build_bot_and_dispatcher()
 
     app = build_app(
         bot=bot,
@@ -197,7 +231,7 @@ async def run_webhook_mode() -> None:  # pragma: no cover
 async def run_polling_mode() -> None:  # pragma: no cover
     logger = structlog.get_logger(__name__)
 
-    redis_fsm, redis_rate_limit, bot, dp = build_bot_and_dispatcher()
+    redis_fsm, redis_rate_limit, bot, dp = await build_bot_and_dispatcher()
 
     # Локальный служебный веб-сервер: health + yookassa webhook + test webhook.
     # Telegram-апдейты сюда НЕ идут — они получаются через long polling ниже.

@@ -10,6 +10,7 @@ from database.enums import DisabledReason, NotificationType, RefundStatus
 from database.models import Payment  # noqa: TC001
 from database.repo import WebhookEventsRepo
 from database.repo.subscriptions import SubscriptionRepo
+from database.repo.users import UserRepo
 from database.session import get_async_session_factory
 from keyboards.client import main_menu_kb
 from services.marzban_subscription import SubscriptionMarzbanService
@@ -131,7 +132,7 @@ def _parse_datetime(raw: str | None) -> datetime | None:
         return None
     try:
         return datetime.fromisoformat(str(raw))
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return None
 
 
@@ -241,7 +242,8 @@ async def _notify_payment_succeeded(
     if not should_send:
         return
 
-    user = payment.user
+    users = UserRepo(session)
+    user = await users.get_by_id(payment.user_id)
     if user is None:
         logger.warning("payment_succeeded_notify_no_user", payment_id=payment.id)
         return
@@ -308,7 +310,8 @@ async def notify_donation_succeeded(
     if not should_send:
         return
 
-    user = payment.user
+    users = UserRepo(session)
+    user = await users.get_by_id(payment.user_id)
     if user is None:
         logger.warning("donation_succeeded_notify_no_user", payment_id=payment.id)
         return

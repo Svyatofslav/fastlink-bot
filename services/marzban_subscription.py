@@ -8,21 +8,15 @@ from clients import get_marzban_client
 from clients.marzban import MarzbanClient, MarzbanRequestError, MarzbanUserCreatePayload
 from database.enums import DisabledReason, SubscriptionStatus
 from database.models import Subscription  # noqa: TC001
+from database.repo.servers import ServerRepo
 from database.repo.subscriptions import SubscriptionRepo
 
 
 class SubscriptionMarzbanService:
-    """
-    Сервис для синхронизации подписок FastLink с Marzban.
-
-    Используется из application-level use cases и scheduler'а.
-    Работает через единый MarzbanClient (admin-логин/пароль из Settings),
-    конкретная нода определяется через Server.marzban_node_id/inbound_tag.
-    """
-
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._subscriptions = SubscriptionRepo(session)
+        self._servers = ServerRepo(session)
         self._client: MarzbanClient = get_marzban_client()
 
     async def activate_subscription(self, subscription_id: int) -> Subscription:
@@ -30,12 +24,16 @@ class SubscriptionMarzbanService:
         if subscription is None:
             raise ValueError(f"Subscription {subscription_id} not found")
 
+        server = await self._servers.get_by_id(subscription.server_id)
+        if server is None:
+            raise ValueError(f"Server {subscription.server_id} not found")
+
         expires_at = subscription.expires_at or datetime.now(UTC)
         expiry_ts = int(expires_at.timestamp())
 
         payload = MarzbanUserCreatePayload(
             username=subscription.marzban_username,
-            inbound_tag=subscription.server.inbound_tag,
+            inbound_tag=server.inbound_tag,
             data_limit_bytes=subscription.data_limit_bytes,
             expiry_timestamp=expiry_ts,
             enabled=True,
@@ -44,13 +42,6 @@ class SubscriptionMarzbanService:
         try:
             marzban_user = await self._client.create_user(payload)
         except MarzbanRequestError as exc:
-            # Defensive-подстраховка: если activate_subscription вызовут
-            # повторно для уже созданного в Marzban пользователя не через
-            # обычную webhook-цепочку (где гонка уже закрыта на уровне
-            # FOR UPDATE SKIP LOCKED в list_pending), Marzban ответит 409
-            # на дубль username. Проверяем именно status_code, а не текст
-            # сообщения — так надёжнее и не зависит от локализации/формата
-            # тела ответа Marzban.
             if exc.status_code == 409:
                 marzban_user = await self._client.get_user(payload.username)
             else:

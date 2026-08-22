@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from config import settings
 from keyboards.client import CB_MENU_HELP, back_to_main_kb, support_kb
 from utils.i18n import t
+from utils.telegram import get_support_bot_username
 
 if TYPE_CHECKING:
     from aiogram.fsm.context import FSMContext
@@ -38,7 +39,7 @@ async def on_help(
         await callback.answer()
         return
 
-    if not settings.feature_support_enabled or not settings.support_bot_username:
+    if not settings.feature_support_enabled or not get_support_bot_username():
         text = t("support.unavailable", lang)
         await message.edit_text(text, reply_markup=back_to_main_kb(user))
         await callback.answer()

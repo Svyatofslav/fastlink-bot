@@ -119,7 +119,6 @@ class Settings(BaseSettings):
         alias="FEATURE_REFUNDS_ENABLED",
     )
     support_bot_token: str = Field(default="", alias="SUPPORT_BOT_TOKEN")
-    support_bot_username: str = Field(default="", alias="SUPPORT_BOT_USERNAME")
     feature_support_enabled: bool = Field(
         default=True,
         alias="FEATURE_SUPPORT_ENABLED",
@@ -164,8 +163,3 @@ class Settings(BaseSettings):
         if self.healthcheck_path.startswith("/"):
             return self.healthcheck_path
         return f"/{self.healthcheck_path}"
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def support_bot_deep_link_base(self) -> str:
-        return f"https://t.me/{self.support_bot_username}"
