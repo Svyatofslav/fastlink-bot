@@ -440,6 +440,6 @@ def t(key: str, lang: str = "ru", **kwargs: object) -> str:
     if kwargs:
         try:
             return base.format(**kwargs)
-        except (KeyError, IndexError, ValueError):
+        except KeyError, IndexError, ValueError:
             return base
     return base

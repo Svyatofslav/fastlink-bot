@@ -35,7 +35,7 @@ class AdminSessionStore:
             admin_id_str, telegram_id_str = value.decode("utf-8").split(":", 1)
             admin_id = int(admin_id_str)
             tg_id = int(telegram_id_str)
-        except (UnicodeDecodeError, ValueError):
+        except UnicodeDecodeError, ValueError:
             return None
 
         return AdminSession(admin_id=admin_id, telegram_id=tg_id)
