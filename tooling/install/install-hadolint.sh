@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tooling/install-hadolint.sh
+# tooling/install/install-hadolint.sh
 set -euo pipefail
 HADOLINT_VERSION="2.15.1"
 curl -fsSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint

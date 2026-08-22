@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 async def test_webhook(request: web.Request) -> web.Response:
     try:
         payload: dict[str, Any] = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except json.JSONDecodeError, UnicodeDecodeError:
         logger.warning("test_webhook_invalid_json")
         return web.Response(status=400, text="invalid json")
 

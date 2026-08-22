@@ -226,7 +226,10 @@ class RefundService:
             )
             return existing
 
-        payment = refund_request.payment
+        payment = await self._payments.get_by_id(refund_request.payment_id)
+        if payment is None:
+            raise ValueError(f"Payment {refund_request.payment_id} not found")
+
         await self._validate_refund_amount(
             payment=payment, refund_request_id=refund_request_id, amount=amount
         )
@@ -337,7 +340,10 @@ class RefundService:
             return refund
 
         now = datetime.now(UTC)
-        payment = refund.payment
+        payment = await self._payments.get_by_id(refund.payment_id)
+        if payment is None:
+            raise ValueError(f"Payment {refund.payment_id} not found")
+
         new_refunded_amount = payment.refunded_amount + refund.amount
 
         if status == RefundStatus.SUCCEEDED and new_refunded_amount > payment.amount:

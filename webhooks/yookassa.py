@@ -30,7 +30,7 @@ async def yookassa_webhook(request: web.Request) -> web.Response:
     try:
         raw_body = await request.text()
         data = json.loads(raw_body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except json.JSONDecodeError, UnicodeDecodeError:
         logger.warning("yookassa_webhook_invalid_json")
         return web.Response(status=400, text="invalid json")
 

@@ -17,6 +17,7 @@ from domain.purchase_metadata import build_yookassa_flat_metadata
 from schemas.dto import NewSubscriptionParams  # noqa: TC001
 from services.notifications import NotificationService
 from services.subscription import SubscriptionService
+from utils.telegram import get_bot_username
 
 logger = structlog.get_logger(__name__)
 
@@ -25,17 +26,14 @@ def get_yookassa_client() -> YooKassaClient:
     """
     Фабрика клиента YooKassa.
 
-    Пока нет реальных ключей или интеграция выключена (флаг в settings),
-    возвращает FakeYooKassaClient, который не делает HTTP-запросов и
-    отдаёт предсказуемую confirmation_url.
+    Пока FEATURE_PAYMENTS_ENABLED=false, возвращает FakeYooKassaClient,
+    который не делает HTTP-запросов и отдаёт предсказуемую confirmation_url.
 
-    Когда подключим боевую YooKassa, будет достаточно выставить флаг
-    в settings, чтобы вернулся реальный клиент.
+    Когда включим боевую YooKassa (FEATURE_PAYMENTS_ENABLED=true и заданы
+    yookassa_shop_id/yookassa_secret_key), вернётся реальный клиент.
     """
     settings = get_settings()
-    # Если у тебя ещё нет поля yookassa_enabled в Settings, можно временно
-    # считать его всегда False или завести с дефолтом False.
-    if not getattr(settings, "yookassa_enabled", False):
+    if not settings.feature_payments_enabled:
         return FakeYooKassaClient()
     return YooKassaClient()
 
@@ -52,13 +50,17 @@ class PaymentService:
     """
 
     def __init__(
-        self, session: AsyncSession, yookassa_client: YooKassaClient | None = None
+        self,
+        session: AsyncSession,
+        yookassa_client: YooKassaClient | None = None,
+        bot_username: str | None = None,
     ) -> None:
         self._session = session
         self._payments = PaymentRepo(session)
         self._notifications = NotificationService(session)
         self._subscriptions = SubscriptionService(session)
         self._yookassa = yookassa_client or get_yookassa_client()
+        self._bot_username_override = bot_username
 
     async def create_payment(
         self,
@@ -329,20 +331,17 @@ class PaymentService:
             refundable=False,
         )
 
-    @staticmethod
-    def _build_return_url(payment_id: int) -> str:
+    def _build_return_url(self, payment_id: int) -> str:
         """
-        Собирает URL, на который YooKassa вернёт пользователя после оплаты.
+        Собирает URL, на который YooKassa вернёт пользователя после оплаты:
+        https://t.me/<bot_username>?start=payment_<id>
 
-        Сейчас это может быть deeplink бота, например:
-        https://t.me/<bot>?start=payment_<id>
-        Конкретный формат можно уточнить позже и вынести в settings.
+        bot_username берётся из явно переданного override (в основном для тестов)
+        либо резолвится лениво через get_bot_username() — только в момент вызова
+        этого метода, а не при создании PaymentService. Это важно: PaymentService
+        создаётся и в worker.py (scheduler jobs для обработки платежей), где
+        set_bot_username() никогда не вызывается, но create_payment()/этот метод
+        там и не используются — только в handlers/client/*.py (процесс bot.py).
         """
-        settings = get_settings()
-        # Если в settings ещё нет bot_deep_link_base, можно временно захардкодить
-        # или добавить с дефолтом.
-        base = getattr(settings, "bot_deep_link_base", "")
-        if base:
-            return f"{base}?start=payment_{payment_id}"
-        # Временно возвращаем заглушку; в бою лучше всегда иметь валидный URL.
-        return "https://example.com/payment_return"
+        username = self._bot_username_override or get_bot_username()
+        return f"https://t.me/{username}?start=payment_{payment_id}"

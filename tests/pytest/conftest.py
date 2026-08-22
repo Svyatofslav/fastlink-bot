@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import Base
 from database.engine import create_test_engine
+from utils.telegram import set_bot_username
 
 
 @pytest_asyncio.fixture
@@ -61,3 +63,15 @@ async def _cleanup_committed_data():
             )
             await conn.commit()
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _set_test_bot_username() -> None:
+    """
+    PaymentService.__init__ требует bot_username (через get_bot_username()),
+    если он не передан явно в конструктор. В проде его выставляет bot.py при
+    старте через bot.get_me(). Тесты создают PaymentService(session) без явного
+    bot_username почти во всех местах — эта фикстура закрывает потребность
+    глобально для всей pytest-сессии, без правок в каждом тестовом файле.
+    """
+    set_bot_username("test_fastlinkbot")

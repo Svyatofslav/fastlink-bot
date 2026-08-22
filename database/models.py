@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base
 from database.enums import (
@@ -79,32 +79,6 @@ class User(TimestampMixin, Base):
         BigInteger, nullable=True
     )
 
-    subscriptions: Mapped[list[Subscription]] = relationship(
-        back_populates="user",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-    )
-    payments: Mapped[list[Payment]] = relationship(
-        back_populates="user",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-    )
-    refund_requests: Mapped[list[RefundRequest]] = relationship(
-        back_populates="user",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-    )
-    notifications: Mapped[list[NotificationLog]] = relationship(
-        back_populates="user",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-    )
-    support_tickets: Mapped[list[SupportTicket]] = relationship(
-        back_populates="user",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-    )
-
 
 class Admin(TimestampMixin, Base):
     __tablename__ = "admins"
@@ -129,28 +103,6 @@ class Admin(TimestampMixin, Base):
         nullable=True,
     )
 
-    created_by_admin: Mapped[Admin | None] = relationship(
-        back_populates="created_admins",
-        remote_side=[id],
-        lazy="selectin",
-    )
-    created_admins: Mapped[list[Admin]] = relationship(
-        back_populates="created_by_admin",
-        lazy="selectin",
-    )
-    reviewed_refund_requests: Mapped[list[RefundRequest]] = relationship(
-        back_populates="reviewed_by_admin",
-        lazy="selectin",
-    )
-    actions: Mapped[list[AdminActionLog]] = relationship(
-        back_populates="admin",
-        lazy="selectin",
-    )
-    assigned_support_tickets: Mapped[list[SupportTicket]] = relationship(
-        back_populates="assigned_admin",
-        lazy="selectin",
-    )
-
 
 class Server(TimestampMixin, Base):
     __tablename__ = "servers"
@@ -169,15 +121,6 @@ class Server(TimestampMixin, Base):
     )
     sort_order: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="100"
-    )
-
-    tariffs: Mapped[list[Tariff]] = relationship(
-        back_populates="server",
-        lazy="selectin",
-    )
-    subscriptions: Mapped[list[Subscription]] = relationship(
-        back_populates="server",
-        lazy="selectin",
     )
 
     __table_args__ = (
@@ -210,15 +153,6 @@ class Tariff(TimestampMixin, Base):
         Integer, nullable=False, server_default="100"
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    server: Mapped[Server | None] = relationship(
-        back_populates="tariffs",
-        lazy="selectin",
-    )
-    subscriptions: Mapped[list[Subscription]] = relationship(
-        back_populates="tariff",
-        lazy="selectin",
-    )
 
     __table_args__ = (
         Index("ix_tariffs_is_active", "is_active"),
@@ -271,35 +205,6 @@ class Subscription(TimestampMixin, Base):
     disabled_reason: Mapped[DisabledReason | None] = mapped_column(
         SqlEnum(DisabledReason, name="disabled_reason"),
         nullable=True,
-    )
-
-    user: Mapped[User] = relationship(
-        back_populates="subscriptions",
-        lazy="selectin",
-    )
-    server: Mapped[Server] = relationship(
-        back_populates="subscriptions",
-        lazy="selectin",
-    )
-    tariff: Mapped[Tariff | None] = relationship(
-        back_populates="subscriptions",
-        lazy="selectin",
-    )
-    payments: Mapped[list[Payment]] = relationship(
-        back_populates="subscription",
-        lazy="selectin",
-    )
-    refund_requests: Mapped[list[RefundRequest]] = relationship(
-        back_populates="subscription",
-        lazy="selectin",
-    )
-    notifications: Mapped[list[NotificationLog]] = relationship(
-        back_populates="subscription",
-        lazy="selectin",
-    )
-    support_tickets: Mapped[list[SupportTicket]] = relationship(
-        back_populates="subscription",
-        lazy="selectin",
     )
 
     __table_args__ = (
@@ -363,27 +268,6 @@ class Payment(TimestampMixin, Base):
         BigInteger, nullable=False, server_default="0"
     )
 
-    user: Mapped[User] = relationship(
-        back_populates="payments",
-        lazy="selectin",
-    )
-    subscription: Mapped[Subscription | None] = relationship(
-        back_populates="payments",
-        lazy="selectin",
-    )
-    refund_requests: Mapped[list[RefundRequest]] = relationship(
-        back_populates="payment",
-        lazy="selectin",
-    )
-    refunds: Mapped[list[Refund]] = relationship(
-        back_populates="payment",
-        lazy="selectin",
-    )
-    support_tickets: Mapped[list[SupportTicket]] = relationship(
-        back_populates="payment",
-        lazy="selectin",
-    )
-
     __table_args__ = (
         Index("ix_payments_status", "status"),
         Index("ix_payments_user_created_at_desc", "user_id", desc("created_at")),
@@ -434,27 +318,6 @@ class RefundRequest(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
-    user: Mapped[User] = relationship(
-        back_populates="refund_requests",
-        lazy="selectin",
-    )
-    payment: Mapped[Payment] = relationship(
-        back_populates="refund_requests",
-        lazy="selectin",
-    )
-    subscription: Mapped[Subscription | None] = relationship(
-        back_populates="refund_requests",
-        lazy="selectin",
-    )
-    reviewed_by_admin: Mapped[Admin | None] = relationship(
-        back_populates="reviewed_refund_requests",
-        lazy="selectin",
-    )
-    refunds: Mapped[list[Refund]] = relationship(
-        back_populates="refund_request",
-        lazy="selectin",
-    )
-
     __table_args__ = (
         Index("ix_refund_requests_status", "status"),
         Index(
@@ -501,15 +364,6 @@ class Refund(TimestampMixin, Base):
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
-    )
-
-    payment: Mapped[Payment] = relationship(
-        back_populates="refunds",
-        lazy="selectin",
-    )
-    refund_request: Mapped[RefundRequest | None] = relationship(
-        back_populates="refunds",
-        lazy="selectin",
     )
 
     __table_args__ = (
@@ -570,29 +424,6 @@ class SupportTicket(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
-    user: Mapped[User] = relationship(
-        back_populates="support_tickets",
-        lazy="selectin",
-    )
-    subscription: Mapped[Subscription | None] = relationship(
-        back_populates="support_tickets",
-        lazy="selectin",
-    )
-    payment: Mapped[Payment | None] = relationship(
-        back_populates="support_tickets",
-        lazy="selectin",
-    )
-    assigned_admin: Mapped[Admin | None] = relationship(
-        back_populates="assigned_support_tickets",
-        lazy="selectin",
-    )
-    messages: Mapped[list[SupportMessage]] = relationship(
-        back_populates="ticket",
-        lazy="selectin",
-        cascade="all, delete-orphan",
-        order_by="SupportMessage.created_at",
-    )
-
     __table_args__ = (
         Index("ix_support_tickets_status", "status"),
         Index("ix_support_tickets_user_status", "user_id", "status"),
@@ -620,11 +451,6 @@ class SupportMessage(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
-    )
-
-    ticket: Mapped[SupportTicket] = relationship(
-        back_populates="messages",
-        lazy="selectin",
     )
 
     __table_args__ = (
@@ -665,15 +491,6 @@ class NotificationLog(Base):
         default=NotificationDeliveryStatus.SENT,
     )
 
-    user: Mapped[User] = relationship(
-        back_populates="notifications",
-        lazy="selectin",
-    )
-    subscription: Mapped[Subscription | None] = relationship(
-        back_populates="notifications",
-        lazy="selectin",
-    )
-
     __table_args__ = (
         UniqueConstraint(
             "user_id", "subscription_id", "type", name="uq_notifications_dedup"
@@ -701,11 +518,6 @@ class AdminActionLog(TimestampMixin, Base):
     payload_before: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     payload_after: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    admin: Mapped[Admin] = relationship(
-        back_populates="actions",
-        lazy="selectin",
-    )
 
     __table_args__ = (
         Index("ix_admin_actions_log_action", "action"),

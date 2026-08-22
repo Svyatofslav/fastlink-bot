@@ -25,7 +25,6 @@ def make_payment(
         subscription_id=None,
         amount=amount,
         currency=currency,
-        user=user,
     )
 
 
@@ -37,6 +36,12 @@ def make_notifications_mock(should_send: bool = True) -> MagicMock:
     return notifications
 
 
+def make_user_repo_mock(user: SimpleNamespace) -> MagicMock:
+    users_repo = MagicMock()
+    users_repo.get_by_id = AsyncMock(return_value=user)
+    return users_repo
+
+
 @pytest.mark.asyncio
 async def test_notify_payment_succeeded_happy_path() -> None:
     user = make_user()
@@ -44,7 +49,11 @@ async def test_notify_payment_succeeded_happy_path() -> None:
     bot = AsyncMock()
     notifications = make_notifications_mock()
 
-    with patch("scheduler.jobs.NotificationService", return_value=notifications):
+    users_repo = make_user_repo_mock(user)
+    with (
+        patch("scheduler.jobs.NotificationService", return_value=notifications),
+        patch("scheduler.jobs.UserRepo", return_value=users_repo),
+    ):
         await _notify_payment_succeeded(bot, session=MagicMock(), payment=payment)
 
     assert bot.send_message.await_count == 2
@@ -76,7 +85,11 @@ async def test_notify_payment_succeeded_first_message_fails() -> None:
     bot.send_message.side_effect = Exception("telegram api error")
     notifications = make_notifications_mock()
 
-    with patch("scheduler.jobs.NotificationService", return_value=notifications):
+    users_repo = make_user_repo_mock(user)
+    with (
+        patch("scheduler.jobs.NotificationService", return_value=notifications),
+        patch("scheduler.jobs.UserRepo", return_value=users_repo),
+    ):
         await _notify_payment_succeeded(bot, session=MagicMock(), payment=payment)
 
     bot.send_message.assert_called_once()
@@ -92,7 +105,11 @@ async def test_notify_payment_succeeded_second_message_fails() -> None:
     bot.send_message.side_effect = [None, Exception("menu send failed")]
     notifications = make_notifications_mock()
 
-    with patch("scheduler.jobs.NotificationService", return_value=notifications):
+    users_repo = make_user_repo_mock(user)
+    with (
+        patch("scheduler.jobs.NotificationService", return_value=notifications),
+        patch("scheduler.jobs.UserRepo", return_value=users_repo),
+    ):
         await _notify_payment_succeeded(bot, session=MagicMock(), payment=payment)
 
     assert bot.send_message.await_count == 2

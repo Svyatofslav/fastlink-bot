@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config import settings
 from database.enums import SubscriptionStatus
 from utils.format import format_price
 from utils.i18n import t
+from utils.telegram import get_support_bot_username
 
 if TYPE_CHECKING:
     from database.models import Server, Subscription, Tariff, User
@@ -316,9 +316,21 @@ def back_to_main_kb(user: User) -> InlineKeyboardMarkup:
 
 
 def support_kb(user: User) -> InlineKeyboardMarkup:
-    """Кнопка перехода в бот поддержки + возврат в главное меню."""
+    """
+    Кнопка перехода в бот поддержки + возврат в главное меню.
+
+    Вызывается только после проверки get_support_bot_username() на None
+    в handlers/client/support.py — сюда доходят только когда поддержка
+    реально доступна.
+    """
     lang = user.language_code or "ru"
-    deep_link = settings.support_bot_deep_link_base
+    username = get_support_bot_username()
+    if username is None:
+        raise RuntimeError(
+            "support_kb() called without support bot being available — "
+            "caller must check get_support_bot_username() first"
+        )
+    deep_link = f"https://t.me/{username}"
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
