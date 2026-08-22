@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tooling/install-nodejs.sh
+# tooling/install/install-nodejs.sh
 set -euo pipefail
 NODE_VERSION="24.19.0"
 NPM_VERSION="12.0.2"

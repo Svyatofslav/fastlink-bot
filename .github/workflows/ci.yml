@@ -139,13 +139,13 @@ jobs:
           PY
 
       - name: Install Gitleaks
-        run: bash tooling/install-gitleaks.sh
+        run: bash tooling/install/install-gitleaks.sh
 
       - name: Install Node.js and jscpd
-        run: bash tooling/install-nodejs.sh
+        run: bash tooling/install/install-nodejs.sh
 
       - name: Install hadolint
-        run: bash tooling/install-hadolint.sh
+        run: bash tooling/install/install-hadolint.sh
 
       - name: Run Alembic migrations
         run: alembic upgrade head

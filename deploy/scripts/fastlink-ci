@@ -275,7 +275,7 @@ cmd_update_venv() {
 
 cmd_update_gitleaks() {
   ensure_app_dir
-  local script="$APP_DIR/tooling/install-gitleaks.sh"
+  local script="$APP_DIR/tooling/install/install-gitleaks.sh"
   test -f "$script"
 
   local target_version
@@ -299,7 +299,7 @@ cmd_update_gitleaks() {
 
 cmd_update_nodejs() {
   ensure_app_dir
-  local script="$APP_DIR/tooling/install-nodejs.sh"
+  local script="$APP_DIR/tooling/install/install-nodejs.sh"
   test -f "$script"
 
   local target_node target_npm target_jscpd
@@ -335,7 +335,7 @@ cmd_update_nodejs() {
 
 cmd_update_hadolint() {
   ensure_app_dir
-  local script="$APP_DIR/tooling/install-hadolint.sh"
+  local script="$APP_DIR/tooling/install/install-hadolint.sh"
   test -f "$script"
 
   local target_version
@@ -359,7 +359,7 @@ cmd_update_hadolint() {
 
 cmd_update_trivy() {
   ensure_app_dir
-  local script="$APP_DIR/tooling/install-trivy.sh"
+  local script="$APP_DIR/tooling/install/install-trivy.sh"
   test -f "$script"
 
   local target_version

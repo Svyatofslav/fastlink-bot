@@ -260,7 +260,7 @@ def check_gitleaks_pre_commit_sync(
 
     if script_version != pre_commit_rev:
         errors.append(
-            f"версия 'gitleaks' в 'tooling/install-gitleaks.sh' ({script_version}) "
+            f"версия 'gitleaks' в 'tooling/install/install-gitleaks.sh' ({script_version}) "
             f"не соответствует версии в '.pre-commit-config.yaml' (rev: v{pre_commit_rev})"
         )
 
@@ -301,7 +301,7 @@ def check_gitleaks_version(install_script_path: Path) -> None:
         installed_version = installed_match.group(1)
         if script_version != installed_version:
             errors.append(
-                f"версия 'gitleaks' в 'tooling/install-gitleaks.sh' ({script_version}) "
+                f"версия 'gitleaks' в 'tooling/install/install-gitleaks.sh' ({script_version}) "
                 f"не соответствует установленной версии ({installed_version})"
             )
     except subprocess.CalledProcessError:
@@ -344,7 +344,7 @@ def check_hadolint_version(install_script_path: Path) -> None:
         installed_version = installed_match.group(1)
         if script_version != installed_version:
             errors.append(
-                f"версия 'hadolint' в 'tooling/install-hadolint.sh' ({script_version}) "
+                f"версия 'hadolint' в 'tooling/install/install-hadolint.sh' ({script_version}) "
                 f"не соответствует установленной версии ({installed_version})"
             )
     except subprocess.CalledProcessError:
@@ -369,7 +369,7 @@ def check_node_version(_install_script_path: Path, script_node: str) -> None:
         installed_node = result.stdout.strip().lstrip("v")
         if script_node != installed_node:
             errors.append(
-                f"версия 'node' в 'tooling/install-nodejs.sh' ({script_node}) "
+                f"версия 'node' в 'tooling/install/install-nodejs.sh' ({script_node}) "
                 f"не соответствует установленной версии ({installed_node})"
             )
     except subprocess.CalledProcessError:
@@ -394,7 +394,7 @@ def check_npm_version(_install_script_path: Path, script_npm: str) -> None:
         installed_npm = result.stdout.strip()
         if script_npm != installed_npm:
             errors.append(
-                f"версия 'npm' в 'tooling/install-nodejs.sh' ({script_npm}) "
+                f"версия 'npm' в 'tooling/install/install-nodejs.sh' ({script_npm}) "
                 f"не соответствует установленной версии ({installed_npm})"
             )
     except subprocess.CalledProcessError:
@@ -424,7 +424,7 @@ def check_jscpd_version(_install_script_path: Path, script_jscpd: str) -> None:
         installed_jscpd = installed_jscpd_match.group(1)
         if script_jscpd != installed_jscpd:
             errors.append(
-                f"версия 'jscpd' в 'tooling/install-nodejs.sh' ({script_jscpd}) "
+                f"версия 'jscpd' в 'tooling/install/install-nodejs.sh' ({script_jscpd}) "
                 f"не соответствует установленной версии ({installed_jscpd})"
             )
     except subprocess.CalledProcessError:
@@ -487,7 +487,7 @@ def check_trivy_version(install_script_path: Path) -> None:
         installed_version = installed_match.group(1)
         if script_version != installed_version:
             errors.append(
-                f"версия 'trivy' в 'tooling/install-trivy.sh' ({script_version}) "
+                f"версия 'trivy' в 'tooling/install/install-trivy.sh' ({script_version}) "
                 f"не соответствует установленной версии ({installed_version})"
             )
     except subprocess.CalledProcessError:
@@ -590,15 +590,15 @@ def main() -> int:
         ROOT / "requirements-dev.txt",
     )
     check_gitleaks_pre_commit_sync(
-        ROOT / "tooling" / "install-gitleaks.sh",
+        ROOT / "tooling" / "install" / "install-gitleaks.sh",
         ROOT / ".pre-commit-config.yaml",
     )
-    check_gitleaks_version(ROOT / "tooling" / "install-gitleaks.sh")
-    check_hadolint_version(ROOT / "tooling" / "install-hadolint.sh")
-    check_nodejs_versions(ROOT / "tooling" / "install-nodejs.sh")
+    check_gitleaks_version(ROOT / "tooling" / "install" / "install-gitleaks.sh")
+    check_hadolint_version(ROOT / "tooling" / "install" / "install-hadolint.sh")
+    check_nodejs_versions(ROOT / "tooling" / "install" / "install-nodejs.sh")
 
     if mode == "server":
-        check_trivy_version(ROOT / "tooling" / "install-trivy.sh")
+        check_trivy_version(ROOT / "tooling" / "install" / "install-trivy.sh")
 
     docker_version = check_python_version(ROOT / "Dockerfile", ROOT / "pyproject.toml")
     check_ci_python_version(ROOT / ".github" / "workflows" / "ci.yml", docker_version)

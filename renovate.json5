@@ -22,7 +22,7 @@
     // --- gitleaks ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-gitleaks.sh"],
+      managerFilePatterns: ["tooling/install/install-gitleaks.sh"],
       matchStrings: [
         'GITLEAKS_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -33,7 +33,7 @@
     // --- hadolint ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-hadolint.sh"],
+      managerFilePatterns: ["tooling/install/install-hadolint.sh"],
       matchStrings: [
         'HADOLINT_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -44,7 +44,7 @@
     // --- node ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-nodejs.sh"],
+      managerFilePatterns: ["tooling/install/install-nodejs.sh"],
       matchStrings: [
         'NODE_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -55,7 +55,7 @@
     // --- npm ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-nodejs.sh"],
+      managerFilePatterns: ["tooling/install/install-nodejs.sh"],
       matchStrings: [
         'NPM_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -66,7 +66,7 @@
     // --- jscpd ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-nodejs.sh"],
+      managerFilePatterns: ["tooling/install/install-nodejs.sh"],
       matchStrings: [
         'JSCPD_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -77,7 +77,7 @@
     // --- trivy ---
     {
       customType: "regex",
-      managerFilePatterns: ["tooling/install-trivy.sh"],
+      managerFilePatterns: ["tooling/install/install-trivy.sh"],
       matchStrings: [
         'TRIVY_VERSION="(?<currentValue>[^"]+)"',
       ],
@@ -85,7 +85,7 @@
       depNameTemplate: "aquasecurity/trivy",
     },
 
-    // --- gitleaks (pre-commit rev, синхронно с install-gitleaks.sh) ---
+    // --- gitleaks (pre-commit rev, синхронно с install/install-gitleaks.sh) ---
     {
       customType: "regex",
       managerFilePatterns: [".pre-commit-config.yaml"],
