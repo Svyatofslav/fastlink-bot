@@ -91,7 +91,7 @@ repos:
       - id: deptry
 
   - repo: https://github.com/seddonym/import-linter
-    rev: "v2.13"
+    rev: "v2.14"
     hooks:
       - id: import-linter
         args: ["--config", "tooling/import-linter.cfg"]
