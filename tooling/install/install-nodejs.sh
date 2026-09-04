@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tooling/install/install-nodejs.sh
 set -euo pipefail
-NODE_VERSION="24.19.0"
+NODE_VERSION="24.20.0"
 NPM_VERSION="12.0.2"
 JSCPD_VERSION="5.0.16"
 NODE_DIST="node-v${NODE_VERSION}-linux-x64"

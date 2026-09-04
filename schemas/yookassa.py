@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from datetime import (
+    datetime,  # noqa: TC003 — нужен в runtime для Pydantic model_validate, НЕ переносить под TYPE_CHECKING
+)
+from typing import Literal
 
 from pydantic import BaseModel, Field
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 # Допустимые типы событий от YooKassa, которые мы обрабатываем.
 # Полный список: https://yookassa.ru/developers/api#notification-object

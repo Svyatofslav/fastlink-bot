@@ -12,6 +12,9 @@ install-hooks:
 secrets-scan:
 	gitleaks detect --source . --config tooling/gitleaks.toml -v --redact
 
+check-versions:
+	$(PYTHON) tooling/check-versions.py
+
 lint:
 	$(PYTHON) -m ruff check .
 
@@ -36,9 +39,6 @@ license-check:
 audit:
 	$(PYTHON) -m pip_audit -r requirements.txt
 	$(PYTHON) -m pip_audit -r requirements-dev.txt
-
-check-versions:
-	$(PYTHON) tooling/check-versions.py
 
 deadcode:
 	$(PYTHON) -m vulture
@@ -85,9 +85,12 @@ migrations-check-server:
 	docker compose run --rm --user root bot bash -lc 'set -o pipefail; /opt/venv/bin/python -m alembic check 2>&1 | grep -v "^INFO"'
 
 security-image:
-	trivy image --severity MEDIUM,HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
-	trivy image --severity LOW,UNKNOWN --exit-code 0 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"
-	trivy clean --all
+	@set -e; \
+	trivy image --severity MEDIUM,HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"; \
+	exit_code=$$?; \
+	trivy image --severity LOW,UNKNOWN --exit-code 0 --ignorefile tooling/.trivyignore "$$(grep '^FASTLINK_IMAGE=' .env | cut -d= -f2-)"; \
+	trivy clean --all; \
+	exit $$exit_code
 
 test:
 	$(PYTHON) -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70
@@ -100,6 +103,6 @@ test-docker:
 	  -v "$(CURDIR)/tests/reports:/app/tests/reports" \
 	  bot bash -lc "pip install -r requirements-dev.txt --quiet && python -m pytest --cov --cov-report=term-missing --cov-report=xml:tests/reports/coverage.xml --cov-fail-under=70"
 
-check: install-hooks lint typecheck security semgrep license-check secrets-scan audit check-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
+check: install-hooks lint typecheck check-versions security semgrep license-check secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check test
 
-check-server: lint typecheck security semgrep license-check secrets-scan audit check-versions deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker
+check-server: lint typecheck check-versions security semgrep license-check secrets-scan audit deadcode deps architecture complexity-report complexity-gate sql-lint dockerfile-lint duplication migrations-check-server security-image test-docker
