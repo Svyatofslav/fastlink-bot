@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from aiogram import Router
 
 from database.enums import PaymentStatus
 from database.repo.payments import PaymentRepo
 from database.repo.users import UserRepo
+from handlers.client.callback_utils import get_callback_message as _get_callback_message
 from keyboards.client import CB_PAYMENT_CANCEL, CB_PAYMENT_CHECK, main_menu_kb
 from services.payment import PaymentService
 from states.purchase import clear_purchase_state
@@ -15,7 +16,7 @@ from utils.i18n import t
 
 if TYPE_CHECKING:
     from aiogram.fsm.context import FSMContext
-    from aiogram.types import CallbackQuery, Message
+    from aiogram.types import CallbackQuery
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from database.models import User
@@ -56,11 +57,10 @@ async def on_payment_check(
         await callback.answer(t("payment.not_found", lang), show_alert=True)
         return
 
-    message = callback.message
+    message = _get_callback_message(callback)
     if message is None:
         await callback.answer()
         return
-    message = cast("Message", message)
 
     if payment.status == PaymentStatus.PENDING:
         await callback.answer(t("payment.pending", lang), show_alert=True)
@@ -114,11 +114,10 @@ async def on_payment_cancel(
         await callback.answer(t("payment.not_found", lang), show_alert=True)
         return
 
-    message = callback.message
+    message = _get_callback_message(callback)
     if message is None:
         await callback.answer()
         return
-    message = cast("Message", message)
 
     if payment.status != PaymentStatus.CANCELED:
         await callback.answer(t("payment.cancel_impossible", lang), show_alert=True)

@@ -9,13 +9,14 @@ from aiogram import Router
 from aiogram.types import BufferedInputFile
 
 from clients.marzban import MarzbanClient, MarzbanClientError
-from database.enums import PaymentProvider, SubscriptionStatus
+from database.enums import PaymentProvider
 from database.repo.servers import ServerRepo
 from database.repo.subscriptions import SubscriptionRepo
 from database.repo.tariffs import TariffRepo
 from domain.purchase_metadata import build_purchase_metadata
 from domain.subscription_extension import compute_extension
 from handlers.client.callback_utils import extract_callback_id as _extract_callback_id
+from handlers.client.callback_utils import get_callback_message as _get_callback_message
 from handlers.client.menu import render_main_menu
 from keyboards.client import (
     CB_MENU_MY_SUBS,
@@ -30,6 +31,7 @@ from keyboards.client import (
     my_subs_list_kb,
     payment_kb,
     subscription_card_kb,
+    subscription_status_label,
     tariffs_kb,
 )
 from services.payment import PaymentService
@@ -38,6 +40,7 @@ from states.purchase import (
     DATA_IS_EXTEND,
     DATA_SERVER_ID,
     PurchaseStates,
+    build_extend_data,
     build_purchase_data,
     clear_purchase_state,
 )
@@ -55,13 +58,6 @@ if TYPE_CHECKING:
 router = Router(name="client-subscriptions")
 
 
-def _get_callback_message(callback: CallbackQuery) -> Message | None:
-    message = callback.message
-    if message is None or not hasattr(message, "edit_text"):
-        return None
-    return cast("Message", message)
-
-
 def _build_subscription_card_context(
     subscription: Subscription,
     server: Server | None,
@@ -71,12 +67,7 @@ def _build_subscription_card_context(
     server_name = server.name if server else t("subs.server_fallback", lang)
     tariff_name = tariff.name if tariff else t("subs.tariff_fallback", lang)
 
-    status_value = getattr(subscription.status, "value", subscription.status)
-    status_label = (
-        t("subs.status_active", lang)
-        if status_value == SubscriptionStatus.ACTIVE.value
-        else t("subs.status_disabled", lang)
-    )
+    status_label = subscription_status_label(subscription, lang)
 
     period_text = t(
         "subs.period_line",
@@ -347,6 +338,7 @@ async def _extend_via_tariff_selection(
     callback: CallbackQuery,
     state: FSMContext,
     user: User,
+    subscription: Subscription,
     server: Server,
     tariffs_repo: TariffRepo,
     lang: str,
@@ -355,6 +347,7 @@ async def _extend_via_tariff_selection(
     await state.clear()
     await state.set_state(PurchaseStates.selecting_tariff)
     await state.update_data(build_purchase_data())
+    await state.update_data(build_extend_data(subscription.id))
     await state.update_data({DATA_SERVER_ID: server.id})
 
     tariffs = await tariffs_repo.get_active_by_server(server.id)
@@ -438,6 +431,7 @@ async def on_subscription_extend(
         callback=callback,
         state=state,
         user=user,
+        subscription=subscription,
         server=server,
         tariffs_repo=tariffs_repo,
         lang=lang,

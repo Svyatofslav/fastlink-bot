@@ -40,11 +40,11 @@ class ThrottlingMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         key = f"throttle:{user.telegram_id}"
-        is_throttled = await self.redis.get(key)
+        acquired = await self.redis.set(
+            key, "1", px=int(self.rate_limit * 1000), nx=True
+        )
 
-        if is_throttled:
+        if not acquired:
             return None
-
-        await self.redis.set(key, "1", px=int(self.rate_limit * 1000), nx=True)
 
         return await handler(event, data)

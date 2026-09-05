@@ -154,7 +154,8 @@ def build_app(
     app[REDIS_RATE_LIMIT_KEY] = redis_rate_limit
 
     app.router.add_get(settings.healthcheck_url_path, healthcheck)
-    app.router.add_post("/webhook/test", test_webhook)
+    if not settings.is_production:
+        app.router.add_post("/webhook/test", test_webhook)
     app.router.add_post("/payments/yookassa/webhook", yookassa_webhook)
 
     if include_telegram_webhook:

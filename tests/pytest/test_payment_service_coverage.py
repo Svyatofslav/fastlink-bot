@@ -82,7 +82,7 @@ def test_get_yookassa_client_returns_real_when_feature_enabled() -> None:
 @pytest.mark.asyncio
 async def test_create_payment_idempotency_hit_before_insert_returns_existing() -> None:
     service, mocks = make_service()
-    existing = SimpleNamespace(id=1)
+    existing = SimpleNamespace(id=1, confirmation_url="https://y.example/pay/1")
     mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=existing)
 
     result = await service.create_payment(
@@ -97,7 +97,10 @@ async def test_create_payment_idempotency_hit_before_insert_returns_existing() -
 async def test_create_payment_race_detected_returns_existing() -> None:
     service, mocks = make_service()
     mocks["payments"].get_by_idempotence_key = AsyncMock(
-        side_effect=[None, SimpleNamespace(id=2)]
+        side_effect=[
+            None,
+            SimpleNamespace(id=2, confirmation_url="https://y.example/pay/2"),
+        ]
     )
     mocks["payments"].create = AsyncMock(side_effect=IntegrityError("dup", None, None))
 
@@ -124,7 +127,13 @@ async def test_create_payment_race_unresolved_reraises() -> None:
 async def test_create_payment_happy_path_donation_metadata() -> None:
     service, mocks = make_service()
     mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=None)
-    created_payment = SimpleNamespace(id=10)
+    created_payment = SimpleNamespace(
+        id=10,
+        metadata_snapshot={"type": "donation", "user_id": "1"},
+        amount=1000,
+        currency="RUB",
+        idempotence_key="key-donation",
+    )
     mocks["payments"].create = AsyncMock(return_value=created_payment)
     link = SimpleNamespace(
         provider_payment_id="pid-1", confirmation_url="https://y.example/pay/10"
@@ -157,7 +166,13 @@ async def test_create_payment_happy_path_donation_metadata() -> None:
 async def test_create_payment_happy_path_purchase_metadata() -> None:
     service, mocks = make_service()
     mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=None)
-    created_payment = SimpleNamespace(id=11)
+    created_payment = SimpleNamespace(
+        id=11,
+        metadata_snapshot={"type": "purchase", "tariff_id": "1"},
+        amount=1000,
+        currency="RUB",
+        idempotence_key="key-purchase",
+    )
     mocks["payments"].create = AsyncMock(return_value=created_payment)
     link = SimpleNamespace(
         provider_payment_id="pid-2", confirmation_url="https://y.example/pay/11"
@@ -186,7 +201,15 @@ async def test_create_payment_happy_path_purchase_metadata() -> None:
 async def test_create_payment_yookassa_error_is_logged_and_reraised() -> None:
     service, mocks = make_service()
     mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=None)
-    mocks["payments"].create = AsyncMock(return_value=SimpleNamespace(id=12))
+    mocks["payments"].create = AsyncMock(
+        return_value=SimpleNamespace(
+            id=12,
+            metadata_snapshot=None,
+            amount=1000,
+            currency="RUB",
+            idempotence_key="key-error",
+        )
+    )
     mocks["yookassa"].create_payment_link = AsyncMock(
         side_effect=YooKassaClientError("boom")
     )
@@ -201,7 +224,15 @@ async def test_create_payment_yookassa_error_is_logged_and_reraised() -> None:
 async def test_create_payment_missing_confirmation_url_raises_runtime_error() -> None:
     service, mocks = make_service()
     mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=None)
-    mocks["payments"].create = AsyncMock(return_value=SimpleNamespace(id=13))
+    mocks["payments"].create = AsyncMock(
+        return_value=SimpleNamespace(
+            id=13,
+            metadata_snapshot=None,
+            amount=1000,
+            currency="RUB",
+            idempotence_key="key-no-url",
+        )
+    )
     link = SimpleNamespace(provider_payment_id="pid-3", confirmation_url="https://x")
     mocks["yookassa"].create_payment_link = AsyncMock(return_value=link)
     mocks["payments"].update = AsyncMock(
@@ -435,3 +466,48 @@ async def test_cancel_pending_payment_not_found_raises() -> None:
 
     with pytest.raises(ValueError, match="not found"):
         await service.cancel_pending_payment(payment_id=999)
+
+
+@pytest.mark.asyncio
+async def test_create_payment_idempotency_hit_with_orphaned_payment_retries_and_recovers() -> (
+    None
+):
+    """
+    Регрессия orphaned-платежа: раньше idempotency-hit сразу возвращал
+    найденный Payment, даже если предыдущая попытка не успела получить
+    confirmation_url от YooKassa. Пользователь получал "мёртвый" платёж
+    без ссылки. Теперь сервис повторяет попытку у провайдера.
+    """
+    service, mocks = make_service()
+
+    orphaned_payment = SimpleNamespace(
+        id=50,
+        confirmation_url=None,
+        metadata_snapshot={"type": "purchase", "tariff_id": "3"},
+        amount=1500,
+        currency="RUB",
+        idempotence_key="key-orphaned",
+    )
+    mocks["payments"].get_by_idempotence_key = AsyncMock(return_value=orphaned_payment)
+
+    link = SimpleNamespace(
+        provider_payment_id="pid-recovered",
+        confirmation_url="https://y.example/pay/50",
+    )
+    mocks["yookassa"].create_payment_link = AsyncMock(return_value=link)
+
+    recovered = SimpleNamespace(id=50, confirmation_url="https://y.example/pay/50")
+    mocks["payments"].update = AsyncMock(return_value=recovered)
+
+    with patch(
+        "services.payment.build_yookassa_flat_metadata",
+        return_value={"flat": "purchase"},
+    ):
+        result = await service.create_payment(
+            user_id=1, amount=1500, currency="RUB", idempotency_key="key-orphaned"
+        )
+
+    assert result is recovered
+    assert result.confirmation_url is not None
+    mocks["yookassa"].create_payment_link.assert_awaited_once()
+    mocks["payments"].create.assert_not_called()

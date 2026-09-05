@@ -100,6 +100,8 @@ class MarzbanClient:
         self._creds = credentials
         self._max_retries = settings.marzban_max_retries
         self._backoff_base = settings.marzban_backoff_base_seconds
+        self._subscription_base_url = settings.subscription_base_url
+        self._subscription_path = settings.subscription_path
         self._logger = structlog.get_logger(__name__)
 
         self._client = httpx.AsyncClient(
@@ -225,19 +227,19 @@ class MarzbanClient:
         """
         Построить subscription URL для VPN-клиента.
 
-        Базируется на XRAY_SUBSCRIPTION_URL_PREFIX и XRAY_SUBSCRIPTION_PATH
-        (как они настроены в Marzban), но хранится на стороне FastLink.
+        Берётся из Settings.subscription_base_url/Settings.subscription_path,
+        которые должны совпадать с XRAY_SUBSCRIPTION_URL_PREFIX/
+        XRAY_SUBSCRIPTION_PATH в конфигурации Marzban — Marzban формирует
+        по ним свои внутренние subscription-ссылки, а FastLink строит
+        точно такую же ссылку на своей стороне для сохранения в
+        Subscription.subscription_url.
 
-        Примеры:
-        - https://fastlinkproject.com/sub/<TOKEN>
+        Пример: https://fastlinkproject.com/sub/<TOKEN>
         """
-        # Здесь мы пока делаем допущение: префикс и path совпадают с продовой
-        # конфигурацией, описанной в документации. При необходимости можно
-        # вынести в Settings.
-        prefix = "https://fastlinkproject.com"
-        path = "/sub"
-
-        return f"{prefix.rstrip('/')}{path}/{token}"
+        return (
+            f"{self._subscription_base_url.rstrip('/')}"
+            f"{self._subscription_path}/{token}"
+        )
 
     def get_primary_config_link(self, user_info: MarzbanUserInfo) -> str | None:
         """Первая доступная конфиг-ссылка пользователя (для клиентов без поддержки subscription)."""

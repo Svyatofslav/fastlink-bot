@@ -42,6 +42,31 @@ CB_SUB_CONFIG_LINK = "sub:config_link"  # sub:config_link:{id}
 CB_SUB_CONFIG_QR = "sub:config_qr"  # sub:config_qr:{id}
 
 
+def is_subscription_active(subscription: Subscription) -> bool:
+    """
+    True, если подписка сейчас активна (статус ACTIVE).
+
+    getattr с фолбэком на subscription.status напрямую — защита на случай,
+    если status придёт не как enum-инстанс, хотя в текущих вызовах всегда
+    передаётся ORM-объект Subscription с типизированным enum-полем.
+    """
+    status_value = getattr(subscription.status, "value", subscription.status)
+    return status_value == SubscriptionStatus.ACTIVE.value
+
+
+def subscription_status_label(subscription: Subscription, lang: str) -> str:
+    """
+    Локализованная метка статуса подписки для отображения пользователю.
+
+    Сейчас бинарная: "активна" для ACTIVE, "отключена" для всех остальных
+    статусов (PENDING, DISABLED, EXPIRED). Единственное место для правки,
+    если понадобится различать их отдельными метками.
+    """
+    if is_subscription_active(subscription):
+        return t("subs.status_active", lang)
+    return t("subs.status_disabled", lang)
+
+
 def main_menu_kb(user: User) -> InlineKeyboardMarkup:
     """Главное меню: точка входа во все клиентские сценарии."""
     lang = user.language_code or "ru"
@@ -219,8 +244,7 @@ def subscription_card_kb(
     """Карточка подписки: 4 способа подключения + продление."""
     lang = user.language_code or "ru"
     builder = InlineKeyboardBuilder()
-    status_value = getattr(subscription.status, "value", subscription.status)
-    is_active = status_value == SubscriptionStatus.ACTIVE.value
+    is_active = is_subscription_active(subscription)
 
     if is_active:
         builder.row(
@@ -276,11 +300,7 @@ def my_subs_list_kb(
     for sub in subscriptions:
         server = servers_by_id.get(sub.server_id)
         server_label = server.name if server else t("subs.server_fallback", lang)
-        status_value = getattr(sub.status, "value", sub.status)
-        if status_value == SubscriptionStatus.ACTIVE.value:
-            status_label = t("subs.status_active", lang)
-        else:
-            status_label = t("subs.status_disabled", lang)
+        status_label = subscription_status_label(sub, lang)
         label = t(
             "subs.list_item",
             lang,

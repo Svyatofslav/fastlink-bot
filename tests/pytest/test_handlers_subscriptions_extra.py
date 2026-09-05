@@ -685,3 +685,67 @@ async def test_on_subscription_config_qr_no_config_link_returns_early(
     callback.answer.assert_awaited_once()
     _, kwargs = callback.answer.call_args
     assert kwargs.get("show_alert") is True
+
+
+@pytest.mark.asyncio
+async def test_extend_via_tariff_selection_stores_extend_marker_in_fsm(monkeypatch):
+    """
+    Регрессия: раньше _extend_via_tariff_selection сохранял в FSM только
+    build_purchase_data(), без build_extend_data(subscription.id). Из-за
+    этого после выбора нового тарифа покупка создавала НОВУЮ подписку
+    вместо продления старой — пользователь терял старую подписку молча.
+    """
+    from handlers.client.subscriptions import on_subscription_extend
+    from states.purchase import (
+        DATA_EXTEND_SUBSCRIPTION_ID,
+        DATA_IS_EXTEND,
+        DATA_SERVER_ID,
+    )
+
+    subscription = SimpleNamespace(id=42, user_id=1, server_id=5, tariff_id=None)
+    server = SimpleNamespace(id=5, name="Server-5")
+
+    subs_repo = AsyncMock()
+    subs_repo.get_by_id = AsyncMock(return_value=subscription)
+    tariffs_repo = AsyncMock()
+    tariffs_repo.get_by_id_active = AsyncMock(return_value=None)
+    tariffs_repo.get_active_by_server = AsyncMock(
+        return_value=[SimpleNamespace(id=1, price_amount=1000, name="Тариф 1")]
+    )
+    servers_repo = AsyncMock()
+    servers_repo.get_by_id_active = AsyncMock(return_value=server)
+
+    monkeypatch.setattr(
+        "handlers.client.subscriptions.SubscriptionRepo", lambda session: subs_repo
+    )
+    monkeypatch.setattr(
+        "handlers.client.subscriptions.TariffRepo", lambda session: tariffs_repo
+    )
+    monkeypatch.setattr(
+        "handlers.client.subscriptions.ServerRepo", lambda session: servers_repo
+    )
+    monkeypatch.setattr(
+        "handlers.client.subscriptions._get_callback_message",
+        lambda callback: AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "handlers.client.subscriptions._extract_callback_id",
+        lambda data, prefix: subscription.id,
+    )
+
+    callback = MagicMock(data=f"sub:extend:{subscription.id}")
+    callback.answer = AsyncMock()
+    state = AsyncMock()
+    user = SimpleNamespace(id=1, language_code="ru")
+
+    await on_subscription_extend(callback, state, MagicMock(), user)
+
+    stored: dict = {}
+    for call in state.update_data.await_args_list:
+        if call.args:
+            stored.update(call.args[0])
+        stored.update(call.kwargs)
+
+    assert stored.get(DATA_IS_EXTEND) is True
+    assert stored.get(DATA_EXTEND_SUBSCRIPTION_ID) == subscription.id
+    assert stored.get(DATA_SERVER_ID) == server.id
