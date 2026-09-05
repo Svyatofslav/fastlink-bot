@@ -47,8 +47,3 @@ CREATE TRIGGER trg_webhook_events_set_updated_at
     BEFORE UPDATE ON webhook_events
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_notifications_log_set_updated_at
-    BEFORE UPDATE ON notifications_log
-    FOR EACH ROW
-    EXECUTE FUNCTION set_updated_at();

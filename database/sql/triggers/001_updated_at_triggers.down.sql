@@ -1,4 +1,3 @@
-DROP TRIGGER IF EXISTS trg_notifications_log_set_updated_at ON notifications_log;
 DROP TRIGGER IF EXISTS trg_webhook_events_set_updated_at ON webhook_events;
 DROP TRIGGER IF EXISTS trg_admin_actions_log_set_updated_at ON admin_actions_log;
 DROP TRIGGER IF EXISTS trg_refunds_set_updated_at ON refunds;
