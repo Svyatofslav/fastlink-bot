@@ -83,6 +83,7 @@ class PaymentService:
         найденную по ключу запись вместо падения наружу. Паттерн
         аналогичен WebhookEventsRepo.create_event для external_id.
         """
+
         existing = await self._payments.get_by_idempotence_key(idempotency_key)
         if existing is not None:
             logger.info(
@@ -90,7 +91,14 @@ class PaymentService:
                 payment_id=existing.id,
                 idempotency_key=idempotency_key,
             )
-            return existing
+            if existing.confirmation_url is not None:
+                return existing
+            logger.warning(
+                "payment_idempotency_hit_missing_confirmation_url",
+                payment_id=existing.id,
+                idempotency_key=idempotency_key,
+            )
+            return await self._create_payment_link_and_update(existing)
 
         try:
             async with self._session.begin_nested():
@@ -116,10 +124,28 @@ class PaymentService:
             existing = await self._payments.get_by_idempotence_key(idempotency_key)
             if existing is None:
                 raise
-            return existing
+            if existing.confirmation_url is not None:
+                return existing
+            return await self._create_payment_link_and_update(existing)
 
         await self._session.flush()
 
+        return await self._create_payment_link_and_update(payment)
+
+    async def _create_payment_link_and_update(self, payment: Payment) -> Payment:
+        """
+        Вызывает YooKassa create_payment_link() для уже существующей записи
+        Payment и сохраняет provider_payment_id/confirmation_url.
+
+        Используется и для только что созданного платежа, и для повторной
+        попытки на idempotency-hit, когда предыдущий вызов провайдера не
+        завершился успешно (confirmation_url остался None). idempotency_key
+        передаётся тот же, что был при первой попытке (payment.idempotence_key) —
+        сама YooKassa также дедуплицирует создание платежа по Idempotence-Key
+        на своей стороне, так что повторный вызов безопасен даже при гонке
+        двух параллельных retry.
+        """
+        metadata_snapshot = payment.metadata_snapshot
         flat_metadata: dict[str, str] = {}
         if metadata_snapshot is not None:
             if metadata_snapshot.get("type") == "donation":
@@ -129,10 +155,10 @@ class PaymentService:
 
         try:
             link = await self._yookassa.create_payment_link(
-                amount=amount,
-                currency=currency,
+                amount=payment.amount,
+                currency=payment.currency,
                 description=f"FastLink payment #{payment.id}",
-                idempotency_key=idempotency_key,
+                idempotency_key=payment.idempotence_key,
                 return_url=self._build_return_url(payment.id),
                 metadata=flat_metadata,
             )
@@ -149,10 +175,6 @@ class PaymentService:
         )
 
         if updated_payment.confirmation_url is None:
-            # Не должно происходить: YooKassaPaymentLink.confirmation_url — обязательное
-            # строковое поле (clients/yookassa.py), FakeYooKassaClient всегда отдаёт
-            # заглушку. Проверка — защита от будущих изменений контракта клиента,
-            # а не ожидаемый бизнес-сценарий.
             raise RuntimeError(
                 f"Payment {updated_payment.id} создан без confirmation_url — "
                 "нарушен контракт платёжного клиента"

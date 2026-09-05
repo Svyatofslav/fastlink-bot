@@ -11,6 +11,7 @@ from database.repo.servers import ServerRepo
 from database.repo.tariffs import TariffRepo
 from domain.purchase_metadata import build_purchase_metadata
 from handlers.client.callback_utils import extract_callback_id as _extract_callback_id
+from handlers.client.callback_utils import get_callback_message as _get_callback_message
 from keyboards.client import (
     CB_CONFIRM_PAY,
     CB_MENU_BACK_TO_TARIFFS,
@@ -39,20 +40,13 @@ from utils.i18n import t
 
 if TYPE_CHECKING:
     from aiogram.fsm.context import FSMContext
-    from aiogram.types import CallbackQuery, Message
+    from aiogram.types import CallbackQuery
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from database.models import Server, Tariff, User
 
 router = Router(name="client-purchase")
 logger = structlog.get_logger(__name__)
-
-
-def _get_callback_message(callback: CallbackQuery) -> Message | None:
-    message = callback.message
-    if message is None:
-        return None
-    return cast("Message", message)
 
 
 async def _load_validated_purchase_context(

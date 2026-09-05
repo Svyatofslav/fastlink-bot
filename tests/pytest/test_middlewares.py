@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -63,7 +64,7 @@ async def test_db_session_middleware_rolls_back_on_exception():
 @pytest.mark.asyncio
 async def test_throttling_middleware_blocks_when_already_throttled():
     fake_redis = AsyncMock()
-    fake_redis.get = AsyncMock(return_value="1")
+    fake_redis.set = AsyncMock(return_value=None)
 
     middleware = ThrottlingMiddleware(redis=fake_redis)
     handler = AsyncMock(return_value="ok")
@@ -74,8 +75,10 @@ async def test_throttling_middleware_blocks_when_already_throttled():
 
     assert result is None
     handler.assert_not_awaited()
-    fake_redis.get.assert_awaited_once_with("throttle:123")
-    fake_redis.set.assert_not_called()
+    fake_redis.set.assert_awaited_once()
+    args, kwargs = fake_redis.set.call_args
+    assert args[0] == "throttle:123"
+    assert kwargs.get("nx") is True
 
 
 @pytest.mark.asyncio
@@ -96,6 +99,7 @@ async def test_throttling_middleware_allows_when_not_throttled():
     fake_redis.set.assert_awaited_once()
     _, kwargs = fake_redis.set.call_args
     assert kwargs.get("nx") is True
+    assert kwargs.get("px") is not None
 
 
 @pytest.mark.asyncio
@@ -129,7 +133,6 @@ async def test_throttling_middleware_passes_through_non_message_callback_events(
 @pytest.mark.asyncio
 async def test_throttling_middleware_different_users_not_blocking_each_other():
     fake_redis = AsyncMock()
-    fake_redis.get = AsyncMock(return_value=None)
     fake_redis.set = AsyncMock(return_value=True)
 
     middleware = ThrottlingMiddleware(redis=fake_redis)
@@ -143,7 +146,7 @@ async def test_throttling_middleware_different_users_not_blocking_each_other():
     await middleware(handler, event, {"user": user_b})
 
     assert handler.await_count == 2
-    called_keys = [call.args[0] for call in fake_redis.get.call_args_list]
+    called_keys = [call.args[0] for call in fake_redis.set.call_args_list]
     assert "throttle:111" in called_keys
     assert "throttle:222" in called_keys
 
@@ -370,3 +373,47 @@ async def test_logging_middleware_handles_event_without_from_user():
 
     assert result == "ok"
     handler.assert_awaited_once()
+
+
+class _FakeRedisWithRealSetNX:
+    def __init__(self) -> None:
+        self._store: dict[str, str] = {}
+
+    async def set(self, key, value, nx=False, px=None, ex=None):
+        if nx and key in self._store:
+            return None
+        self._store[key] = value
+        return True
+
+    async def get(self, key):
+        return self._store.get(key)
+
+
+@pytest.mark.asyncio
+async def test_throttling_middleware_concurrent_requests_only_one_passes():
+    """
+    Регрессия TOCTOU-гонки: раньше GET и SET были раздельными вызовами,
+    и два конкурентных запроса от одного user могли оба пройти проверку
+    GET до того, как любой из них выставит ключ. Атомарный SET NX должен
+    пропускать ровно один запрос из двух одновременных.
+    """
+    fake_redis = _FakeRedisWithRealSetNX()
+    middleware = ThrottlingMiddleware(redis=fake_redis)
+    call_count = 0
+
+    async def handler(event, data):
+        nonlocal call_count
+        call_count += 1
+        return "ok"
+
+    user = MagicMock(telegram_id=999)
+    event = MagicMock(spec=Message)
+
+    results = await asyncio.gather(
+        middleware(handler, event, {"user": user}),
+        middleware(handler, event, {"user": user}),
+    )
+
+    assert call_count == 1
+    assert results.count("ok") == 1
+    assert results.count(None) == 1

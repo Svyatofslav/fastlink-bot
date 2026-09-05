@@ -137,8 +137,8 @@ class FakeYooKassaClient(YooKassaClient):
 
     Не делает HTTP-запросов — сразу возвращает предсказуемую ссылку.
     Переключение между реальным и фейковым клиентом делается через
-    настройку settings.yookassa_enabled (или аналогичный флаг),
-    а не через прямой импорт в хендлерах.
+    настройку settings.feature_payments_enabled (см. get_yookassa_client()
+    в services/payment.py), а не через прямой импорт в хендлерах.
     """
 
     def __init__(self) -> None:

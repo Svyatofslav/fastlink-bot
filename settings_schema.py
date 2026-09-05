@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     webhook_path: str = Field(alias="WEBHOOK_PATH")
     webhook_secret: str = Field(alias="WEBHOOK_SECRET")
     healthcheck_path: str = Field(default="health", alias="HEALTHCHECK_PATH")
+    subscription_base_url: str = Field(
+        default="https://fastlinkproject.com",
+        alias="SUBSCRIPTION_BASE_URL",
+    )
+    subscription_path: str = Field(default="/sub", alias="SUBSCRIPTION_PATH")
 
     # Bind на все интерфейсы обязателен для работы внутри Docker-сети
     _HTTP_HOST_DEFAULT = "0.0.0.0"  # noqa: S104 # nosec B104

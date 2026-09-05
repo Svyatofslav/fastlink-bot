@@ -177,8 +177,10 @@ class SubscriptionService:
           (текущий expires_at, now) — чтобы не терять уже оплаченные
           дни при продлении заранее и не начислять их "в прошлое",
           если подписка уже истекла.
-        - data_used_bytes сбрасывается в 0, data_limit_bytes берётся
-          из тарифа (на случай если тариф с тех пор поменялся).
+        - data_limit_bytes увеличивается на tariff.data_limit_bytes сверх
+          текущего значения (через domain.subscription_extension.compute_extension) —
+          фактический остаток трафика после продления равен "старый остаток +
+          лимит нового периода". data_used_bytes не сбрасывается и не трогается.
         - если подписка была DISABLED по причине EXPIRED, возвращаем
           её в ACTIVE через Marzban.
         """
