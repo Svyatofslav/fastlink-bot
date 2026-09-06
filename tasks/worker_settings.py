@@ -10,12 +10,14 @@ from arq.connections import RedisSettings  # noqa: TC002
 from arq.cron import CronJob  # noqa: TC002
 from arq.typing import WorkerSettingsBase
 
+from clients import get_marzban_client
 from config import get_deploy_commit_short, settings
 from infrastructure.taskqueue.arq_impl import ArqTaskQueue, build_redis_settings
 from tasks.subscription_tasks import (
     run_expire_overdue_subscriptions,
     run_send_expiration_reminders_1d,
     run_send_expiration_reminders_3d,
+    run_sync_subscriptions_traffic,
 )
 from tasks.webhook_tasks import run_process_webhook_events
 
@@ -41,6 +43,7 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     bot: Bot | None = ctx.get("bot")
     if bot is not None:
         await bot.session.close()
+    await get_marzban_client().aclose()
     logger.info("arq_worker_shutdown")
 
 
@@ -52,6 +55,7 @@ class WorkerSettings(WorkerSettingsBase):
         run_expire_overdue_subscriptions,
         run_send_expiration_reminders_3d,
         run_send_expiration_reminders_1d,
+        run_sync_subscriptions_traffic,
     ]
 
     cron_jobs: list[CronJob] = [  # noqa: RUF012
@@ -72,6 +76,11 @@ class WorkerSettings(WorkerSettingsBase):
             run_send_expiration_reminders_1d,
             hour={9},
             minute={5},
+        ),
+        cron(
+            run_sync_subscriptions_traffic,
+            minute={0, 30},
+            timeout=300,
         ),
     ]
     on_startup = staticmethod(startup)

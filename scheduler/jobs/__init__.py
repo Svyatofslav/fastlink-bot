@@ -349,11 +349,16 @@ async def _ensure_subscription_activated(
     """
     Активировать подписку в Marzban, если это ещё не было сделано.
 
-    Идемпотентно: если subscription_url уже выставлен, значит create_user
-    в Marzban уже прошёл успешно ранее — повторный вызов не выполняется.
-    Это защищает от дублирования пользователей в Marzban при retry
-    webhook-событий (например, если предыдущая попытка активации упала
-    из-за временной недоступности Marzban API).
+    Идемпотентно: если subscription_url уже выставлен (непустая строка),
+    значит create_user в Marzban уже прошёл успешно ранее — повторный
+    вызов не выполняется. Это защищает от дублирования пользователей в
+    Marzban при retry webhook-событий (например, если предыдущая попытка
+    активации упала из-за временной недоступности Marzban API).
+
+    subscription_url в БД — NOT NULL, инициализируется пустой строкой при
+    создании подписки, поэтому проверка именно на truthy-значение, а не
+    на "is not None" (которое для "" всегда было бы True и не давало бы
+    активации сработать вообще ни разу).
     """
     subscriptions = SubscriptionRepo(session)
     subscription = await subscriptions.get_by_id(subscription_id)
@@ -364,7 +369,7 @@ async def _ensure_subscription_activated(
         )
         return
 
-    if subscription.subscription_url is not None:
+    if subscription.subscription_url:
         logger.debug(
             "subscription_already_activated",
             subscription_id=subscription_id,
@@ -548,3 +553,33 @@ async def process_webhook_events_with_session(
     except Exception:
         await session.rollback()
         logger.exception("webhook_events_batch_failed")
+
+
+async def sync_subscriptions_traffic() -> None:
+    factory = get_async_session_factory()
+    async with factory() as session:
+        repo = SubscriptionRepo(session)
+        service = SubscriptionService(session)
+        try:
+            subscriptions = await repo.get_active()
+            if not subscriptions:
+                return
+            logger.info(
+                "subscriptions_traffic_sync_started",
+                count=len(subscriptions),
+            )
+            for subscription in subscriptions:
+                try:
+                    await service.update_traffic_with_notifications(
+                        subscription_id=subscription.id,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "subscription_traffic_sync_failed",
+                        subscription_id=subscription.id,
+                        exc_info=exc,
+                    )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("subscriptions_traffic_sync_batch_failed")

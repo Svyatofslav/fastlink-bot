@@ -72,18 +72,20 @@ async def test_update_traffic_triggers_80_percent_notification(
     db_session.add(subscription)
     await db_session.commit()
 
-    # Мокаем Marzban sync_traffic: он просто обновляет data_used_bytes.
-    async def fake_sync_traffic(
-        self, *, subscription_id: int, data_used_bytes: int
-    ) -> Subscription:
+    # Мокаем Marzban sync_traffic: имитируем, что "Marzban сейчас сообщает"
+    # data_used_bytes через внешнее изменяемое состояние (раньше это был
+    # параметр вызова, теперь sync_traffic всегда сам решает, откуда брать
+    # значение — в реальности из get_user(), здесь — из traffic_state).
+    traffic_state = {"data_used_bytes": 0}
+
+    async def fake_sync_traffic(self, *, subscription_id: int) -> Subscription:
         sub = await db_session.get(Subscription, subscription_id)
-        sub.data_used_bytes = data_used_bytes
+        sub.data_used_bytes = traffic_state["data_used_bytes"]
         db_session.add(sub)
         await db_session.flush()
         await db_session.refresh(sub)
         return sub
 
-    # Мокаем NotificationService.notify_traffic_80/95/100, чтобы считать вызовы.
     calls_80: list[tuple[int, int]] = []
     calls_95: list[tuple[int, int]] = []
     calls_100: list[tuple[int, int]] = []
@@ -124,19 +126,15 @@ async def test_update_traffic_triggers_80_percent_notification(
     )
 
     # 79% — ничего не должно отправиться
-    await service.update_traffic_with_notifications(
-        subscription_id=subscription.id,
-        data_used_bytes=int(tariff.data_limit_bytes * 79 // 100),
-    )
+    traffic_state["data_used_bytes"] = int(tariff.data_limit_bytes * 79 // 100)
+    await service.update_traffic_with_notifications(subscription_id=subscription.id)
     assert calls_80 == []
     assert calls_95 == []
     assert calls_100 == []
 
     # 85% — только notify_traffic_80
-    await service.update_traffic_with_notifications(
-        subscription_id=subscription.id,
-        data_used_bytes=int(tariff.data_limit_bytes * 85 // 100),
-    )
+    traffic_state["data_used_bytes"] = int(tariff.data_limit_bytes * 85 // 100)
+    await service.update_traffic_with_notifications(subscription_id=subscription.id)
     assert calls_80 == [(user.id, subscription.id)]
     assert calls_95 == []
     assert calls_100 == []
@@ -197,11 +195,11 @@ async def test_update_traffic_triggers_95_and_100_percent_notifications(
     db_session.add(subscription)
     await db_session.commit()
 
-    async def fake_sync_traffic(
-        self, *, subscription_id: int, data_used_bytes: int
-    ) -> Subscription:
+    traffic_state = {"data_used_bytes": 0}
+
+    async def fake_sync_traffic(self, *, subscription_id: int) -> Subscription:
         sub = await db_session.get(Subscription, subscription_id)
-        sub.data_used_bytes = data_used_bytes
+        sub.data_used_bytes = traffic_state["data_used_bytes"]
         db_session.add(sub)
         await db_session.flush()
         await db_session.refresh(sub)
@@ -236,16 +234,12 @@ async def test_update_traffic_triggers_95_and_100_percent_notifications(
     )
 
     # 97% — только 95-порог
-    await service.update_traffic_with_notifications(
-        subscription_id=subscription.id,
-        data_used_bytes=int(tariff.data_limit_bytes * 97 // 100),
-    )
+    traffic_state["data_used_bytes"] = int(tariff.data_limit_bytes * 97 // 100)
+    await service.update_traffic_with_notifications(subscription_id=subscription.id)
     assert calls_95 == [(user.id, subscription.id)]
     assert calls_100 == []
 
     # 120% — только 100-порог (новый вызов)
-    await service.update_traffic_with_notifications(
-        subscription_id=subscription.id,
-        data_used_bytes=int(tariff.data_limit_bytes * 120 // 100),
-    )
+    traffic_state["data_used_bytes"] = int(tariff.data_limit_bytes * 120 // 100)
+    await service.update_traffic_with_notifications(subscription_id=subscription.id)
     assert calls_100 == [(user.id, subscription.id)]

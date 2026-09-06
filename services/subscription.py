@@ -183,6 +183,9 @@ class SubscriptionService:
           лимит нового периода". data_used_bytes не сбрасывается и не трогается.
         - если подписка была DISABLED по причине EXPIRED, возвращаем
           её в ACTIVE через Marzban.
+        - после пересчёта expires_at/data_limit_bytes эти значения
+          синхронно уходят в Marzban через update_limits(),
+          иначе локальные и реальные данные разойдутся.
         """
         subscription = await self._subscriptions.get_by_id(subscription_id)
         if subscription is None:
@@ -205,6 +208,8 @@ class SubscriptionService:
             data_limit_bytes=new_data_limit_bytes,
         )
 
+        await self._marzban.update_limits(subscription.id)
+
         if was_expired_disabled:
             subscription = await self._marzban.set_enabled(
                 subscription_id=subscription.id,
@@ -218,22 +223,14 @@ class SubscriptionService:
         self,
         *,
         subscription_id: int,
-        data_used_bytes: int,
     ) -> Subscription:
         """
-        Обновить трафик по подписке и, при необходимости, инициировать уведомления
-        о достижении порогов использования (80/95/100%).
+        Обновить трафик по подписке (читая фактический used_traffic из
+        Marzban — трафик считается самим Xray/нодой, писать его "снаружи"
+        невозможно) и, при необходимости, инициировать уведомления о
+        достижении порогов использования (80/95/100%).
         """
-        subscription: Subscription | None = await self._subscriptions.get_by_id(
-            subscription_id
-        )
-        if subscription is None:
-            raise ValueError(f"Subscription {subscription_id} not found")
-
-        subscription = await self._marzban.sync_traffic(
-            subscription_id=subscription_id,
-            data_used_bytes=data_used_bytes,
-        )
+        subscription = await self._marzban.sync_traffic(subscription_id=subscription_id)
 
         if subscription.data_limit_bytes <= 0:
             return subscription

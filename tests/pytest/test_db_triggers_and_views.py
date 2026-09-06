@@ -424,3 +424,59 @@ async def test_payment_refund_overview_view_left_joins_payment_without_refund(
     assert result.refund_request_id is None
     assert result.refund_id is None
     assert result.refund_amount is None
+
+
+@pytest.mark.asyncio
+async def test_payment_refund_overview_view_links_refund_to_correct_request(
+    db_session,
+) -> None:
+    """
+    У одного платежа — две заявки на рефанд (одна отклонена, вторая
+    обработана), и только один Refund, привязанный к обработанной заявке.
+    Старый JOIN (refunds -> payments по payment_id напрямую) склеивал
+    один и тот же рефанд с обеими заявками — баг.
+    """
+    user = await _make_user(db_session)
+    payment = await _make_payment(db_session, user)
+
+    rejected_request = RefundRequest(
+        user_id=user.id,
+        payment_id=payment.id,
+        reason="передумал",
+        status=RefundRequestStatus.REJECTED,
+    )
+    approved_request = RefundRequest(
+        user_id=user.id,
+        payment_id=payment.id,
+        reason="товар не пришёл",
+        status=RefundRequestStatus.PROCESSED,
+    )
+    db_session.add_all([rejected_request, approved_request])
+    await db_session.flush()
+
+    refund = Refund(
+        payment_id=payment.id,
+        refund_request_id=approved_request.id,
+        provider=PaymentProvider.YOOKASSA,
+        amount=19900,
+        status=RefundStatus.SUCCEEDED,
+    )
+    db_session.add(refund)
+    await db_session.flush()
+
+    rows = await db_session.execute(
+        text(
+            "SELECT refund_request_id, refund_id, refund_amount "
+            "FROM payment_refund_overview_view "
+            "WHERE payment_id = :pid"
+        ),
+        {"pid": payment.id},
+    )
+    by_request = {row.refund_request_id: row for row in rows.all()}
+
+    assert len(by_request) == 2, "по одной строке на каждую заявку на рефанд"
+    assert by_request[rejected_request.id].refund_id is None, (
+        "рефанд не должен приклеиваться к отклонённой заявке"
+    )
+    assert by_request[approved_request.id].refund_id == refund.id
+    assert by_request[approved_request.id].refund_amount == 19900

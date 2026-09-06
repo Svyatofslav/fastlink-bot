@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from arq import ArqRedis, create_pool
@@ -15,6 +15,9 @@ from infrastructure.taskqueue.contracts import (
     TaskEnqueueError,
     TaskQueueConnectionError,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 logger = structlog.get_logger(__name__)
 
@@ -57,7 +60,10 @@ class _ArqLockHandle:
         if not self._acquired:
             return
         try:
-            await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, self._key, self._token)
+            await cast(
+                "Awaitable[Any]",
+                self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, self._key, self._token),
+            )
         finally:
             # Помечаем как снятый в любом случае, чтобы не пытаться
             # снять его повторно (например, в finally вызывающего кода).

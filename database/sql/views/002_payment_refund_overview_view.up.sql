@@ -20,4 +20,4 @@ SELECT
 FROM payments AS p
 INNER JOIN users AS u ON p.user_id = u.id
 LEFT JOIN refund_requests AS rr ON p.id = rr.payment_id
-LEFT JOIN refunds AS r ON p.id = r.payment_id;
+LEFT JOIN refunds AS r ON rr.id = r.refund_request_id;

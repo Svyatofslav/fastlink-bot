@@ -75,6 +75,15 @@ async def _fake_set_enabled(
     return sub
 
 
+async def _fake_update_limits(self, subscription_id: int) -> None:
+    """
+    No-op: extend_for_payment() не использует возвращаемое значение
+    update_limits(), а реальный вызов ушёл бы в MarzbanClient → Redis,
+    которого в тестовом окружении нет.
+    """
+    return
+
+
 def _build_extension_metadata_snapshot(user, server, tariff, subscription):
     """
     Строит metadata_snapshot ровно так, как это делает production-хендлер
@@ -99,6 +108,11 @@ async def test_extension_payment_extends_expires_at_and_carries_over_traffic(
     monkeypatch.setattr(
         "services.marzban_subscription.SubscriptionMarzbanService.set_enabled",
         _fake_set_enabled,
+    )
+
+    monkeypatch.setattr(
+        "services.marzban_subscription.SubscriptionMarzbanService.update_limits",
+        _fake_update_limits,
     )
 
     user, server, tariff, subscription = await _make_active_subscription(
@@ -176,6 +190,11 @@ async def test_extension_reactivates_expired_disabled_subscription(
     monkeypatch.setattr(
         "services.marzban_subscription.SubscriptionMarzbanService.set_enabled",
         _fake_set_enabled,
+    )
+
+    monkeypatch.setattr(
+        "services.marzban_subscription.SubscriptionMarzbanService.update_limits",
+        _fake_update_limits,
     )
 
     user, server, tariff, subscription = await _make_active_subscription(

@@ -277,6 +277,7 @@ async def test_extend_for_payment_reenables_previously_expired_subscription(
     await db_session.commit()
 
     service = SubscriptionService(db_session)
+    service._marzban.update_limits = AsyncMock()
     reenabled = MagicMock(status=SubscriptionStatus.ACTIVE)
     service._marzban.set_enabled = AsyncMock(return_value=reenabled)
 
@@ -285,6 +286,7 @@ async def test_extend_for_payment_reenables_previously_expired_subscription(
     )
 
     assert result is reenabled
+    service._marzban.update_limits.assert_awaited_once_with(subscription.id)
     service._marzban.set_enabled.assert_awaited_once_with(
         subscription_id=subscription.id, enabled=True, disabled_reason=None
     )
@@ -313,12 +315,14 @@ async def test_extend_for_payment_active_subscription_does_not_call_marzban(
     await db_session.commit()
 
     service = SubscriptionService(db_session)
+    service._marzban.update_limits = AsyncMock()
     service._marzban.set_enabled = AsyncMock()
 
     await service.extend_for_payment(
         subscription_id=subscription.id, tariff_id=tariff.id
     )
 
+    service._marzban.update_limits.assert_awaited_once_with(subscription.id)
     service._marzban.set_enabled.assert_not_awaited()
 
 
@@ -334,6 +338,4 @@ async def test_update_traffic_with_notifications_not_found_raises(
     service = SubscriptionService(db_session)
 
     with pytest.raises(ValueError, match="Subscription 999999 not found"):
-        await service.update_traffic_with_notifications(
-            subscription_id=999999, data_used_bytes=100
-        )
+        await service.update_traffic_with_notifications(subscription_id=999999)

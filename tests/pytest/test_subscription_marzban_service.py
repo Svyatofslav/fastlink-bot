@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -20,7 +20,8 @@ if TYPE_CHECKING:
 @pytest.mark.asyncio
 async def test_activate_subscription_success(db_session: AsyncSession, monkeypatch):
     """
-    Успешная активация: set ACTIVE и проставление subscription_url.
+    Успешная активация: set ACTIVE и проставление subscription_url
+    из ответа Marzban (create_user), без локальной пересборки URL.
     """
     servers = ServerRepo(session=db_session)
     tariffs = TariffRepo(session=db_session)
@@ -80,10 +81,8 @@ async def test_activate_subscription_success(db_session: AsyncSession, monkeypat
             data_limit_bytes=1000,
             data_used_bytes=0,
             expiry_timestamp=None,
+            subscription_url="https://fastlinkproject.com/sub/test-user",
         )
-    )
-    fake_client.build_subscription_url = Mock(
-        return_value="https://fastlinkproject.com/sub/test-user"
     )
     service._client = fake_client
 
@@ -153,9 +152,6 @@ async def test_activate_subscription_network_error(
     fake_client = AsyncMock(spec=MarzbanClient)
     fake_client.create_user = AsyncMock(
         side_effect=MarzbanRequestError("network error")
-    )
-    fake_client.build_subscription_url = Mock(
-        return_value="https://fastlinkproject.com/sub/test-user-2"
     )
     service._client = fake_client
 
@@ -238,10 +234,8 @@ async def test_activate_subscription_conflict_recovers_existing_user(
             data_limit_bytes=1000,
             data_used_bytes=0,
             expiry_timestamp=None,
+            subscription_url="https://fastlinkproject.com/sub/conflict-user",
         )
-    )
-    fake_client.build_subscription_url = Mock(
-        return_value="https://fastlinkproject.com/sub/conflict-user"
     )
     service._client = fake_client
 

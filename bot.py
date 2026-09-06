@@ -189,8 +189,8 @@ async def on_shutdown(app: web.Application) -> None:
             await bot.delete_webhook(drop_pending_updates=False)
 
     await bot.session.close()
-    await redis_fsm.aclose()  # type: ignore[attr-defined]
-    await redis_rate_limit.aclose()  # type: ignore[attr-defined]
+    await redis_fsm.aclose()
+    await redis_rate_limit.aclose()
 
 
 async def run_webhook_mode() -> None:  # pragma: no cover
@@ -260,8 +260,8 @@ async def run_polling_mode() -> None:  # pragma: no cover
     finally:
         await runner.cleanup()
         await bot.session.close()
-        await redis_fsm.aclose()  # type: ignore[attr-defined]
-        await redis_rate_limit.aclose()  # type: ignore[attr-defined]
+        await redis_fsm.aclose()
+        await redis_rate_limit.aclose()
 
 
 async def main() -> None:  # pragma: no cover

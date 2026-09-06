@@ -187,6 +187,31 @@ def parse_mypy_additional_dependencies(path: Path) -> dict[str, str]:
     return deps
 
 
+def check_mypy_additional_dependencies(
+    pre_commit_path: Path, requirements_path: Path, requirements_dev_path: Path
+) -> None:
+    combined_pins = {
+        **parse_requirements(requirements_path),
+        **parse_requirements(requirements_dev_path),
+    }
+    for pkg, version in parse_mypy_additional_dependencies(pre_commit_path).items():
+        expected = combined_pins.get(pkg)
+        if expected is None:
+            errors.append(
+                f"пакет '{pkg}' указан в additional_dependencies mypy-хука "
+                f".pre-commit-config.yaml ({version}), но отсутствует в "
+                f"requirements.txt/requirements-dev.txt — pre-commit поставит "
+                f"его в изолированном окружении хука независимо от venv"
+            )
+            continue
+        if expected != version:
+            errors.append(
+                f"версия '{pkg}' в additional_dependencies mypy-хука "
+                f".pre-commit-config.yaml ({version}) не соответствует "
+                f"версии в requirements.txt/requirements-dev.txt ({expected})"
+            )
+
+
 def check_pre_commit_revs(pre_commit_path: Path, requirements_dev_path: Path) -> None:
     dev_pins = parse_requirements(requirements_dev_path)
     for _repo_url, rev, hook_ids in parse_pre_commit_config(pre_commit_path):
@@ -206,25 +231,6 @@ def check_pre_commit_revs(pre_commit_path: Path, requirements_dev_path: Path) ->
                     f"(rev: {rev}) не соответствует версии в "
                     f"requirements-dev.txt ({expected})"
                 )
-
-
-def check_mypy_additional_dependencies(
-    pre_commit_path: Path, requirements_path: Path, requirements_dev_path: Path
-) -> None:
-    combined_pins = {
-        **parse_requirements(requirements_path),
-        **parse_requirements(requirements_dev_path),
-    }
-    for pkg, version in parse_mypy_additional_dependencies(pre_commit_path).items():
-        expected = combined_pins.get(pkg)
-        if expected is None:
-            continue
-        if expected != version:
-            errors.append(
-                f"версия '{pkg}' в additional_dependencies mypy-хука "
-                f".pre-commit-config.yaml ({version}) не соответствует "
-                f"версии в requirements.txt/requirements-dev.txt ({expected})"
-            )
 
 
 def check_gitleaks_pre_commit_sync(

@@ -47,29 +47,55 @@ class SubscriptionMarzbanService:
             else:
                 raise
 
-        subscription_url = self._client.build_subscription_url(marzban_user.username)
-
+        # subscription_url приходит готовым от Marzban — не пересобирается
+        # на нашей стороне (иначе рискуем построить ссылку, не совпадающую
+        # с реальной, и/или предсказуемую по username).
         return await self._subscriptions.set_status(
             subscription,
             status=SubscriptionStatus.ACTIVE,
-            subscription_url=subscription_url,
+            subscription_url=marzban_user.subscription_url,
             disabled_reason=None,
         )
 
-    async def sync_traffic(
-        self, subscription_id: int, *, data_used_bytes: int
-    ) -> Subscription:
+    async def sync_traffic(self, subscription_id: int) -> Subscription:
+        """
+        Синхронизировать фактически израсходованный трафик из Marzban в БД.
+
+        Трафик считается самим Xray/нодой на стороне Marzban — это read-only
+        значение, писать его "снаружи" в Marzban API невозможно (в реальном
+        UserModify такого поля нет вообще, только data_limit/expire/status).
+        Поэтому направление синхронизации — только из Marzban в нашу БД,
+        никогда наоборот.
+        """
         subscription = await self._subscriptions.get_by_id(subscription_id)
         if subscription is None:
             raise ValueError(f"Subscription {subscription_id} not found")
 
-        subscription = await self._subscriptions.update_traffic(
-            subscription, data_used_bytes=data_used_bytes
+        marzban_user = await self._client.get_user(subscription.marzban_username)
+
+        return await self._subscriptions.update_traffic(
+            subscription, data_used_bytes=marzban_user.data_used_bytes
         )
 
-        await self._client.set_user_traffic(
-            username=subscription.marzban_username,
-            data_used_bytes=data_used_bytes,
+    async def update_limits(self, subscription_id: int) -> Subscription:
+        """
+        Прокидывает актуальные data_limit_bytes/expires_at подписки в Marzban
+        через партиальный PUT /api/user/{username} (UserModify).
+
+        Вызывается после продления подписки — иначе реальный VPN-аккаунт в
+        Marzban останется со старым лимитом трафика и старым сроком действия,
+        несмотря на то что в БД FastLink уже записаны новые значения и
+        пользователь оплатил продление.
+        """
+        subscription = await self._subscriptions.get_by_id(subscription_id)
+        if subscription is None:
+            raise ValueError(f"Subscription {subscription_id} not found")
+
+        expires_at = subscription.expires_at or datetime.now(UTC)
+        await self._client.update_user(
+            subscription.marzban_username,
+            data_limit_bytes=subscription.data_limit_bytes,
+            expiry_timestamp=int(expires_at.timestamp()),
         )
         return subscription
 
@@ -92,8 +118,8 @@ class SubscriptionMarzbanService:
         if subscription is None:
             raise ValueError(f"Subscription {subscription_id} not found")
 
-        await self._client.set_user_enabled(
-            username=subscription.marzban_username,
+        await self._client.update_user(
+            subscription.marzban_username,
             enabled=enabled,
         )
 

@@ -78,6 +78,12 @@ class SubscriptionRepo(BaseRepo[Subscription]):
         )
         return list(result.scalars().all())
 
+    async def get_active(self) -> list[Subscription]:
+        result = await self.session.execute(
+            select(Subscription).where(Subscription.status == SubscriptionStatus.ACTIVE)
+        )
+        return list(result.scalars().all())
+
     async def update_traffic(
         self,
         subscription: Subscription,

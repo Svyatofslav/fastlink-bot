@@ -110,26 +110,37 @@ async def test_sync_traffic_not_found_raises(db_session: AsyncSession) -> None:
     service = SubscriptionMarzbanService(session=db_session)
 
     with pytest.raises(ValueError, match="Subscription 999999 not found"):
-        await service.sync_traffic(999999, data_used_bytes=100)
+        await service.sync_traffic(999999)
 
 
 @pytest.mark.asyncio
 async def test_sync_traffic_updates_db_and_calls_client(
     db_session: AsyncSession,
 ) -> None:
+    """
+    sync_traffic читает used_traffic из Marzban (get_user) и пишет
+    его в БД — направление синхронизации только "из Marzban", без
+    обратной записи (такого API-метода у Marzban нет вообще).
+    """
     subscription = await _make_subscription(db_session, suffix="traffic1")
     service = SubscriptionMarzbanService(session=db_session)
 
     fake_client = AsyncMock(spec=MarzbanClient)
-    fake_client.set_user_traffic = AsyncMock()
+    fake_client.get_user = AsyncMock(
+        return_value=MarzbanUserInfo(
+            username=subscription.marzban_username,
+            enabled=True,
+            data_limit_bytes=1000,
+            data_used_bytes=500,
+            expiry_timestamp=None,
+        )
+    )
     service._client = fake_client
 
-    result = await service.sync_traffic(subscription.id, data_used_bytes=500)
+    result = await service.sync_traffic(subscription.id)
 
     assert result.data_used_bytes == 500
-    fake_client.set_user_traffic.assert_awaited_once_with(
-        username=subscription.marzban_username, data_used_bytes=500
-    )
+    fake_client.get_user.assert_awaited_once_with(subscription.marzban_username)
 
 
 # ---------------------------------------------------------------------------
@@ -213,15 +224,15 @@ async def test_set_enabled_true_activates(db_session: AsyncSession) -> None:
     service = SubscriptionMarzbanService(session=db_session)
 
     fake_client = AsyncMock(spec=MarzbanClient)
-    fake_client.set_user_enabled = AsyncMock()
+    fake_client.update_user = AsyncMock()
     service._client = fake_client
 
     result = await service.set_enabled(subscription.id, enabled=True)
 
     assert result.status == SubscriptionStatus.ACTIVE
     assert result.disabled_reason is None
-    fake_client.set_user_enabled.assert_awaited_once_with(
-        username=subscription.marzban_username, enabled=True
+    fake_client.update_user.assert_awaited_once_with(
+        subscription.marzban_username, enabled=True
     )
 
 
@@ -233,7 +244,7 @@ async def test_set_enabled_false_disables_with_reason(
     service = SubscriptionMarzbanService(session=db_session)
 
     fake_client = AsyncMock(spec=MarzbanClient)
-    fake_client.set_user_enabled = AsyncMock()
+    fake_client.update_user = AsyncMock()
     service._client = fake_client
 
     result = await service.set_enabled(
@@ -242,6 +253,6 @@ async def test_set_enabled_false_disables_with_reason(
 
     assert result.status == SubscriptionStatus.DISABLED
     assert result.disabled_reason == DisabledReason.EXPIRED
-    fake_client.set_user_enabled.assert_awaited_once_with(
-        username=subscription.marzban_username, enabled=False
+    fake_client.update_user.assert_awaited_once_with(
+        subscription.marzban_username, enabled=False
     )
