@@ -1,22 +1,18 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from clients.marzban import MarzbanClient
 from clients.metrics import MetricsClient
 
 
+@lru_cache
 def get_marzban_client() -> MarzbanClient:
-    """
-    Фабрика для MarzbanClient.
-
-    Используется в сервисах/worker’ах, чтобы централизовать создание клиента.
-    """
+    """Единый переиспользуемый MarzbanClient. Кешируется на весь процесс."""
     return MarzbanClient()
 
 
+@lru_cache
 def get_metrics_client() -> MetricsClient:
-    """
-    Фабрика для MetricsClient.
-
-    Используется в сервисах/worker’ах, чтобы централизовать создание клиента.
-    """
+    """Единый переиспользуемый MetricsClient. Кешируется на весь процесс."""
     return MetricsClient()

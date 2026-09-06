@@ -8,6 +8,7 @@ from scheduler.jobs import (
     expire_overdue_subscriptions,
     send_expiration_reminders_1d,
     send_expiration_reminders_3d,
+    sync_subscriptions_traffic,
 )
 
 if TYPE_CHECKING:
@@ -18,6 +19,8 @@ logger = structlog.get_logger(__name__)
 _EXPIRE_LOCK_KEY = "subscriptions:expire_overdue"
 _REMINDER_3D_LOCK_KEY = "subscriptions:reminder_3d"
 _REMINDER_1D_LOCK_KEY = "subscriptions:reminder_1d"
+_TRAFFIC_SYNC_LOCK_KEY = "subscriptions:sync_traffic"
+_TRAFFIC_SYNC_LOCK_TTL_SECONDS = 300
 _LOCK_TTL_SECONDS = 60
 
 
@@ -64,3 +67,18 @@ async def run_send_expiration_reminders_1d(ctx: dict[str, Any]) -> None:
             logger.info("reminder_1d_skip_locked")
             return
         await send_expiration_reminders_1d()
+
+
+async def run_sync_subscriptions_traffic(ctx: dict[str, Any]) -> None:
+    task_queue: ArqTaskQueue | None = ctx.get("task_queue")
+    if task_queue is None:
+        logger.warning("traffic_sync_lock_unavailable")
+        await sync_subscriptions_traffic()
+        return
+    async with task_queue.lock(
+        _TRAFFIC_SYNC_LOCK_KEY, ttl_seconds=_TRAFFIC_SYNC_LOCK_TTL_SECONDS
+    ) as acquired:
+        if not acquired:
+            logger.info("traffic_sync_skip_locked")
+            return
+        await sync_subscriptions_traffic()
