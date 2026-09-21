@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tooling/install/install-nodejs.sh
 set -euo pipefail
-NODE_VERSION="24.20.0"
+NODE_VERSION="24.21.0"
 NPM_VERSION="12.0.2"
-JSCPD_VERSION="5.0.16"
+JSCPD_VERSION="5.3.0"
 NODE_DIST="node-v${NODE_VERSION}-linux-x64"
 
 curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/nodejs.tar.xz
